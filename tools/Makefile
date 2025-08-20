@@ -1,19 +1,72 @@
 # Trusioo API Tools
 # 数据库和管理工具集合
 
-.PHONY: help db-migrate db-test db-verify admin-check debug-data
+.PHONY: help db-init db-migrate db-rollback db-status db-create db-force db-drop db-backup db-restore db-test db-verify admin-check debug-data
 
 help:
-	@echo "可用的工具命令："
-	@echo "  db-migrate    - 执行数据库迁移"
-	@echo "  db-test       - 测试数据库连接"
-	@echo "  db-verify     - 验证数据库表结构"
-	@echo "  admin-check   - 检查和修复管理员密码"
-	@echo "  debug-data    - 检查表中的数据统计"
+	@echo "=== Trusioo API 数据库工具 ==="
+	@echo "迁移管理："
+	@echo "  db-init          - 初始化数据库和迁移系统"
+	@echo "  db-migrate       - 执行所有待处理的迁移"
+	@echo "  db-rollback      - 回滚最后一个迁移"
+	@echo "  db-rollback-n N  - 回滚N个迁移"
+	@echo "  db-status        - 显示当前迁移版本状态"
+	@echo "  db-create NAME   - 创建新的迁移文件"
+	@echo "  db-force N       - 强制设置迁移版本（危险操作）"
+	@echo "  db-drop          - 删除所有表（危险操作）"
+	@echo "  db-backup        - 创建数据库备份"
+	@echo "  db-restore FILE  - 从备份恢复（危险操作）"
+	@echo ""
+	@echo "其他工具："
+	@echo "  db-test          - 测试数据库连接"
+	@echo "  db-verify        - 验证数据库表结构"
+	@echo "  admin-check      - 检查和修复管理员密码"
+	@echo "  debug-data       - 检查表中的数据统计"
+	@echo ""
+	@echo "示例："
+	@echo "  make db-create NAME=add_user_preferences"
+	@echo "  make db-rollback-n N=2"
+	@echo "  make db-force N=1"
+
+db-init:
+	@echo "🔧 初始化数据库和迁移系统..."
+	@cd db && go run init.go
 
 db-migrate:
-	@echo "执行数据库迁移..."
-	@go run db/migrate/migrate.go
+	@echo "🚀 执行数据库迁移..."
+	@cd db && go run migrate_new.go -action=up
+
+db-rollback:
+	@echo "⬇️  回滚最后一个迁移..."
+	@cd db && go run migrate_new.go -action=down -steps=1
+
+db-rollback-n:
+	@echo "⬇️  回滚 $(N) 个迁移..."
+	@cd db && go run migrate_new.go -action=down -steps=$(N)
+
+db-status:
+	@cd db && go run status.go
+
+db-create:
+	@echo "📝 创建新迁移: $(NAME)"
+	@cd db && go run migrate_new.go -action=create -name="$(NAME)"
+
+db-force:
+	@echo "⚡ 强制设置迁移版本到 $(N)..."
+	@cd db && go run migrate_new.go -action=force -force=$(N)
+
+db-drop:
+	@echo "🗑️  删除所有表..."
+	@read -p "确定要删除所有表吗？这将清空整个数据库！输入 'yes' 确认: " confirm && [ "$$confirm" = "yes" ]
+	@cd db && go run migrate_new.go -action=drop
+
+db-backup:
+	@echo "📦 创建数据库备份..."
+	@cd db && go run backup.go -action=backup
+
+db-restore:
+	@echo "🔄 从备份恢复数据库..."
+	@cd db && go run backup.go -action=restore -file="$(FILE)"
 
 db-test:
 	@echo "测试数据库连接..."
