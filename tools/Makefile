@@ -70,11 +70,11 @@ db-restore:
 
 db-test:
 	@echo "测试数据库连接..."
-	@go run db/test/test.go
+	@go run db/legacy/test/test.go
 
 db-verify:
 	@echo "验证数据库表结构..."
-	@go run db/verify/verify.go
+	@go run db/legacy/verify/verify.go
 
 admin-check:
 	@echo "检查管理员账户..."
