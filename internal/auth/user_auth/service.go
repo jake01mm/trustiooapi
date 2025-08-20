@@ -1,8 +1,10 @@
 package user_auth
 
 import (
+	"context"
 	"database/sql"
-	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"trusioo_api/config"
@@ -12,6 +14,7 @@ import (
 	verificationDto "trusioo_api/internal/auth/verification/dto"
 	"trusioo_api/internal/common"
 	"trusioo_api/pkg/auth"
+	"trusioo_api/pkg/ipinfo"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -19,29 +22,23 @@ import (
 type Service struct {
 	repo                Repository
 	verificationService *verification.Service
+	ipinfoClient        ipinfo.Client
 }
 
 func NewService(repo Repository) *Service {
+	ipinfoConfig := ipinfo.LoadConfigFromEnv()
+	ipinfoClient := ipinfo.NewClient(ipinfoConfig)
+	
 	return &Service{
 		repo:                repo,
 		verificationService: verification.NewService(),
+		ipinfoClient:        ipinfoClient,
 	}
 }
 
 func (s *Service) Register(req *dto.RegisterRequest) (*dto.RegisterResponse, error) {
-	// 验证验证码
-	verifyReq := &verificationDto.VerifyCodeRequest{
-		Target: req.Email,
-		Code:   req.VerificationCode,
-		Type:   "register",
-	}
-	_, err := s.verificationService.VerifyCode(verifyReq)
-	if err != nil {
-		return nil, err
-	}
-
 	// 检查邮箱是否已存在
-	_, err = s.repo.GetByEmail(req.Email)
+	_, err := s.repo.GetByEmail(req.Email)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -55,15 +52,15 @@ func (s *Service) Register(req *dto.RegisterRequest) (*dto.RegisterResponse, err
 		return nil, err
 	}
 
-	// 创建用户
+	// 创建用户 - 默认未激活状态
 	user := &entities.User{
 		Name:          "", // 注册时不需要姓名
 		Email:         req.Email,
 		Password:      string(hashedPassword),
 		Phone:         nil, // 注册时不需要手机号
 		Role:          "user",
-		Status:        "active",
-		EmailVerified: true, // 验证码验证通过后设置为true
+		Status:        "inactive", // 默认未激活
+		EmailVerified: false,      // 默认未验证
 		PhoneVerified: false,
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
@@ -117,8 +114,9 @@ func (s *Service) PreAuth(req *dto.PreAuthRequest) (*dto.PreAuthResponse, error)
 	}, nil
 }
 
-func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto.LoginResponse, error) {
-	// 1. 首先验证email+password
+// Login 第一步登录 - 验证email+password并发送登录验证码
+func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto.LoginCodeResponse, error) {
+	// 1. 验证email+password
 	user, err := s.repo.GetByEmail(req.Email)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -135,16 +133,44 @@ func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto
 		return nil, common.ErrInvalidCredentials
 	}
 
-	// 检查用户状态
+	// 检查用户状态 - 必须是激活状态才能登录
 	if user.Status != "active" {
-		s.recordLoginSession(user.ID, clientIP, userAgent, "email", "failed", "账户已禁用")
+		s.recordLoginSession(user.ID, clientIP, userAgent, "email", "failed", "账户未激活")
 		return nil, common.ErrUserInactive
+	}
+
+	// 2. 发送登录验证码
+	sendReq := &verificationDto.SendVerificationRequest{
+		Target: req.Email,
+		Type:   "login",
+	}
+	_, err = s.verificationService.SendVerificationCode(sendReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.LoginCodeResponse{
+		Message:   "登录验证码已发送",
+		LoginCode: "已发送到邮箱",
+		ExpiresIn: 600, // 10分钟
+	}, nil
+}
+
+// LoginVerify 第二步登录 - 验证登录验证码并返回token
+func (s *Service) LoginVerify(req *dto.LoginVerifyRequest, clientIP, userAgent string) (*dto.LoginResponse, error) {
+	// 1. 获取用户信息
+	user, err := s.repo.GetByEmail(req.Email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, common.ErrInvalidCredentials
+		}
+		return nil, err
 	}
 
 	// 2. 验证验证码
 	verifyReq := &verificationDto.VerifyCodeRequest{
 		Target: req.Email,
-		Code:   req.VerificationCode,
+		Code:   req.Code,
 		Type:   "login",
 	}
 	verifyResp, err := s.verificationService.VerifyCode(verifyReq)
@@ -157,24 +183,26 @@ func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto
 		return nil, common.ErrInvalidCode
 	}
 
-	// 生成访问令牌
+	// 3. 生成访问令牌
 	accessToken, err := auth.GenerateAccessToken(user.ID, user.Email, user.Role, "user")
 	if err != nil {
 		return nil, err
 	}
 
-	// 生成刷新令牌
+	// 4. 生成刷新令牌
 	refreshTokenStr, err := auth.GenerateRefreshToken(user.ID, user.Email, user.Role, "user")
 	if err != nil {
 		return nil, err
 	}
 
-	// 保存刷新令牌
+	// 5. 保存刷新令牌
 	refreshToken := &entities.RefreshToken{
-		UserID:    user.ID,
-		Token:     refreshTokenStr,
-		ExpiresAt: time.Now().Add(time.Duration(config.AppConfig.JWT.RefreshExpire) * time.Second),
-		CreatedAt: time.Now(),
+		UserID:     user.ID,
+		Token:      refreshTokenStr,
+		IsValid:    true,
+		ExpiresAt:  time.Now().Add(time.Duration(config.AppConfig.JWT.RefreshExpire) * time.Second),
+		DeviceInfo: userAgent,
+		CreatedAt:  time.Now(),
 	}
 
 	err = s.repo.CreateRefreshToken(refreshToken)
@@ -182,14 +210,14 @@ func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto
 		return nil, err
 	}
 
-	// 更新最后登录时间
+	// 6. 更新最后登录时间
 	err = s.repo.UpdateLastLogin(user.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 记录登录会话
-	s.recordLoginSession(user.ID, clientIP, userAgent, "email", "success", "登录成功")
+	// 7. 记录登录会话并获取位置信息
+	sessionInfo := s.recordLoginSessionWithIPInfo(user.ID, clientIP, userAgent, "email", "success", "登录成功")
 
 	return &dto.LoginResponse{
 		AccessToken:  accessToken,
@@ -204,6 +232,7 @@ func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto
 			Role:   user.Role,
 			Status: user.Status,
 		},
+		LoginSession: sessionInfo,
 	}, nil
 }
 
@@ -249,7 +278,12 @@ func (s *Service) GetUserByID(userID int64) (*entities.User, error) {
 	return s.repo.GetByID(userID)
 }
 
+
 func (s *Service) recordLoginSession(userID int64, ip, userAgent, method, status, reason string) {
+	s.recordLoginSessionWithIPInfo(userID, ip, userAgent, method, status, reason)
+}
+
+func (s *Service) recordLoginSessionWithIPInfo(userID int64, ip, userAgent, method, status, reason string) *dto.LoginSessionInfo {
 	session := &entities.LoginSession{
 		UserID:      userID,
 		IP:          ip,
@@ -260,8 +294,88 @@ func (s *Service) recordLoginSession(userID int64, ip, userAgent, method, status
 		CreatedAt:   time.Now(),
 	}
 
+	// 获取IP地理位置信息
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	if ipInfo, err := s.ipinfoClient.GetIPInfo(ctx, ip); err == nil {
+		session.Country = ipInfo.Country
+		session.City = ipInfo.City
+		session.Region = ipInfo.Region
+		session.Timezone = ipInfo.Timezone
+		session.Organization = ipInfo.Org
+		session.Location = ipInfo.Loc
+	} else {
+		log.Printf("获取IP信息失败 %s: %v", ip, err)
+	}
+
+	// 解析User-Agent获取设备信息
+	s.parseUserAgent(session, userAgent)
+
 	err := s.repo.CreateLoginSession(session)
 	if err != nil {
-		fmt.Printf("记录登录会话失败: %v\n", err)
+		log.Printf("记录登录会话失败: %v", err)
+		return nil
+	}
+
+	// 返回会话信息给客户端
+	if status == "success" {
+		return &dto.LoginSessionInfo{
+			IP:           session.IP,
+			Country:      session.Country,
+			City:         session.City,
+			Region:       session.Region,
+			Timezone:     session.Timezone,
+			Organization: session.Organization,
+			Location:     session.Location,
+			IsTrusted:    session.IsTrusted,
+		}
+	}
+	return nil
+}
+
+func (s *Service) parseUserAgent(session *entities.LoginSession, userAgent string) {
+	ua := strings.ToLower(userAgent)
+	
+	// 检测设备类型
+	if strings.Contains(ua, "mobile") || strings.Contains(ua, "android") || strings.Contains(ua, "iphone") {
+		session.DeviceType = "mobile"
+	} else if strings.Contains(ua, "tablet") || strings.Contains(ua, "ipad") {
+		session.DeviceType = "tablet"
+	} else {
+		session.DeviceType = "desktop"
+	}
+	
+	// 检测操作系统
+	if strings.Contains(ua, "windows") {
+		session.OS = "Windows"
+	} else if strings.Contains(ua, "mac") || strings.Contains(ua, "darwin") {
+		session.OS = "macOS"
+	} else if strings.Contains(ua, "linux") {
+		session.OS = "Linux"
+	} else if strings.Contains(ua, "android") {
+		session.OS = "Android"
+	} else if strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad") || strings.Contains(ua, "ios") {
+		session.OS = "iOS"
+	}
+	
+	// 检测浏览器
+	if strings.Contains(ua, "chrome") && !strings.Contains(ua, "edge") {
+		session.Browser = "Chrome"
+	} else if strings.Contains(ua, "firefox") {
+		session.Browser = "Firefox"
+	} else if strings.Contains(ua, "safari") && !strings.Contains(ua, "chrome") {
+		session.Browser = "Safari"
+	} else if strings.Contains(ua, "edge") {
+		session.Browser = "Edge"
+	} else if strings.Contains(ua, "opera") {
+		session.Browser = "Opera"
+	}
+	
+	// 检测平台
+	if strings.Contains(ua, "mobile") || strings.Contains(ua, "android") || strings.Contains(ua, "iphone") {
+		session.Platform = "mobile"
+	} else {
+		session.Platform = "web"
 	}
 }

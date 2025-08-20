@@ -17,14 +17,14 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-// Login 管理员登录
-// @Summary 管理员登录
-// @Description 管理员使用邮箱和密码登录系统
+// Login 管理员登录第一步
+// @Summary 管理员登录第一步
+// @Description 验证管理员邮箱和密码，成功后发送登录验证码
 // @Tags 管理员
 // @Accept json
 // @Produce json
 // @Param request body AdminLoginRequest true "登录请求参数"
-// @Success 200 {object} common.Response{data=dto.AdminLoginResponse} "登录成功"
+// @Success 200 {object} common.Response{data=dto.AdminLoginCodeResponse} "验证码发送成功"
 // @Failure 400 {object} common.Response "参数错误或登录失败"
 // @Failure 500 {object} common.Response "服务器错误"
 // @Router /api/v1/admin/auth/login [post]
@@ -47,6 +47,43 @@ func (h *Handler) Login(c *gin.Context) {
 			common.ValidationError(c, "Email or password is incorrect")
 		case common.ErrAdminInactive:
 			common.ValidationError(c, "Account not activated")
+		default:
+			common.ServerError(c, err)
+		}
+		return
+	}
+
+	common.Success(c, resp)
+}
+
+// LoginVerify 管理员登录第二步
+// @Summary 管理员登录第二步
+// @Description 验证管理员登录验证码并返回访问令牌
+// @Tags 管理员
+// @Accept json
+// @Produce json
+// @Param request body AdminLoginVerifyRequest true "登录验证请求参数"
+// @Success 200 {object} common.Response{data=dto.AdminLoginResponse} "登录成功"
+// @Failure 400 {object} common.Response "参数错误或验证失败"
+// @Failure 500 {object} common.Response "服务器错误"
+// @Router /api/v1/admin/auth/login/verify [post]
+func (h *Handler) LoginVerify(c *gin.Context) {
+	var req dto.AdminLoginVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ValidationError(c, err.Error())
+		return
+	}
+
+	clientIP := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
+
+	resp, err := h.service.LoginVerify(&req, clientIP, userAgent)
+	if err != nil {
+		switch err {
+		case common.ErrAdminNotFound:
+			common.ValidationError(c, "Admin does not exist")
+		case common.ErrInvalidCode:
+			common.ValidationError(c, "Invalid or expired verification code")
 		default:
 			common.ServerError(c, err)
 		}

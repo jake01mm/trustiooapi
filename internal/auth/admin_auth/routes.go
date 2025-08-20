@@ -13,6 +13,7 @@ func RegisterRoutes(router *gin.RouterGroup, handler *Handler) {
 		auth := admin.Group("/auth")
 		{
 			auth.POST("/login", handler.Login)
+			auth.POST("/login/verify", handler.LoginVerify)
 			auth.POST("/refresh", handler.RefreshToken)
 		}
 

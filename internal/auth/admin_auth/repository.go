@@ -161,9 +161,9 @@ func (r *adminRepository) InvalidateAllRefreshTokens(adminID int64) error {
 func (r *adminRepository) CreateLoginSession(session *entities.AdminLoginSession) error {
 	query := `
 		INSERT INTO admin_login_sessions (
-			admin_id, ip, country, city, user_agent, device_type, os, browser, 
-			is_trusted, platform, status, reason
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			admin_id, ip, country, city, region, timezone, organization, location,
+			user_agent, device_type, os, browser, is_trusted, platform, status, reason
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		RETURNING id, created_at`
 	
 	return database.DB.QueryRow(query,
@@ -171,6 +171,10 @@ func (r *adminRepository) CreateLoginSession(session *entities.AdminLoginSession
 		session.IP,
 		session.Country,
 		session.City,
+		session.Region,
+		session.Timezone,
+		session.Organization,
+		session.Location,
 		session.UserAgent,
 		session.DeviceType,
 		session.OS,

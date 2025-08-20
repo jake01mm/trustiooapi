@@ -1,6 +1,8 @@
 package verification
 
 import (
+	"strings"
+	
 	"trusioo_api/internal/auth/verification/dto"
 	"trusioo_api/internal/common"
 
@@ -27,6 +29,15 @@ func (h *Handler) SendVerificationCode(c *gin.Context) {
 
 	resp, err := h.service.SendVerificationCode(&req)
 	if err != nil {
+		// 处理特定的错误类型
+		if strings.Contains(err.Error(), "user not found in database") {
+			common.ValidationError(c, "User not found, please register first")
+			return
+		}
+		if strings.Contains(err.Error(), "verification code was sent recently") {
+			common.ValidationError(c, "Verification code was sent recently, please wait before requesting again")
+			return
+		}
 		common.ServerError(c, err)
 		return
 	}

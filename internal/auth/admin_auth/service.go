@@ -1,7 +1,10 @@
 package admin
 
 import (
+	"context"
 	"database/sql"
+	"log"
+	"strings"
 	"time"
 
 	"trusioo_api/config"
@@ -11,6 +14,7 @@ import (
 	verificationDto "trusioo_api/internal/auth/verification/dto"
 	"trusioo_api/internal/common"
 	"trusioo_api/pkg/auth"
+	"trusioo_api/pkg/ipinfo"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -19,19 +23,66 @@ import (
 type Service struct {
 	adminRepo           AdminRepository
 	verificationService *verification.Service
+	ipinfoClient        ipinfo.Client
 }
 
 // NewService 创建新的Service实例
 func NewService() *Service {
+	ipinfoConfig := ipinfo.LoadConfigFromEnv()
+	ipinfoClient := ipinfo.NewClient(ipinfoConfig)
+	
 	return &Service{
 		adminRepo:           NewAdminRepository(),
 		verificationService: verification.NewService(),
+		ipinfoClient:        ipinfoClient,
 	}
 }
 
-// Login 管理员登录
-func (s *Service) Login(req *dto.AdminLoginRequest, clientIP, userAgent string) (*dto.AdminLoginResponse, error) {
-	// 查找管理员
+// Login 管理员登录第一步 - 验证email+password并发送登录验证码
+func (s *Service) Login(req *dto.AdminLoginRequest, clientIP, userAgent string) (*dto.AdminLoginCodeResponse, error) {
+	// 1. 验证email+password
+	admin, err := s.adminRepo.GetByEmail(req.Email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			s.recordLoginSession(0, clientIP, userAgent, "failed", "管理员不存在")
+			return nil, common.ErrAdminNotFound
+		}
+		return nil, err
+	}
+
+	// 验证密码
+	err = bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(req.Password))
+	if err != nil {
+		s.recordLoginSession(admin.ID, clientIP, userAgent, "failed", "密码错误")
+		return nil, common.ErrInvalidAdminCredentials
+	}
+
+	// 检查管理员状态 - 必须是激活状态才能登录
+	if admin.Status != "active" {
+		s.recordLoginSession(admin.ID, clientIP, userAgent, "failed", "管理员账户未激活")
+		return nil, common.ErrAdminInactive
+	}
+
+	// 2. 发送登录验证码
+	sendReq := &verificationDto.SendVerificationRequest{
+		Target: req.Email,
+		Type:   "admin_login",
+	}
+	_, err = s.verificationService.SendVerificationCode(sendReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.AdminLoginCodeResponse{
+		Message:   "管理员登录验证码已发送",
+		LoginCode: "已发送到邮箱",
+		ExpiresIn: 600, // 10分钟
+	}, nil
+}
+
+// LoginVerify 管理员登录第二步 - 验证登录验证码并返回token
+func (s *Service) LoginVerify(req *dto.AdminLoginVerifyRequest, clientIP, userAgent string) (*dto.AdminLoginResponse, error) {
+	// 1. 获取管理员信息
 	admin, err := s.adminRepo.GetByEmail(req.Email)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -40,78 +91,65 @@ func (s *Service) Login(req *dto.AdminLoginRequest, clientIP, userAgent string) 
 		return nil, err
 	}
 
-	// 检查管理员状态
-	if admin.Status != "active" {
-		return nil, common.ErrAdminInactive
-	}
-
-	// 验证密码
-	err = bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(req.Password))
-	if err != nil {
-		// 记录失败的登录会话
-		s.recordLoginSession(admin.ID, clientIP, userAgent, "failed", "密码错误")
-		return nil, common.ErrInvalidAdminCredentials
-	}
-
-	// 验证验证码
+	// 2. 验证验证码
 	verifyReq := &verificationDto.VerifyCodeRequest{
 		Target: req.Email,
-		Code:   req.VerificationCode,
+		Code:   req.Code,
 		Type:   "admin_login",
 	}
 	verifyResp, err := s.verificationService.VerifyCode(verifyReq)
 	if err != nil {
-		// 记录失败的登录会话
-		s.recordLoginSession(admin.ID, clientIP, userAgent, "failed", "验证码验证失败")
+		s.recordLoginSession(admin.ID, clientIP, userAgent, "failed", "验证码错误")
 		return nil, err
 	}
 	if !verifyResp.Valid {
-		// 记录失败的登录会话
 		s.recordLoginSession(admin.ID, clientIP, userAgent, "failed", "验证码无效")
 		return nil, common.ErrInvalidCode
 	}
 
-	// 生成访问令牌
+	// 3. 生成访问令牌
 	accessToken, err := auth.GenerateAccessToken(admin.ID, admin.Email, admin.Role, "admin")
 	if err != nil {
 		return nil, err
 	}
 
-	// 生成刷新令牌
-	refreshToken, err := auth.GenerateRefreshToken(admin.ID, admin.Email, admin.Role, "admin")
+	// 4. 生成刷新令牌
+	refreshTokenStr, err := auth.GenerateRefreshToken(admin.ID, admin.Email, admin.Role, "admin")
 	if err != nil {
 		return nil, err
 	}
 
-	// 保存刷新令牌到数据库
-	refreshTokenEntity := &entities.AdminRefreshToken{
+	// 5. 保存刷新令牌到数据库
+	refreshToken := &entities.AdminRefreshToken{
 		AdminID:    admin.ID,
-		Token:      refreshToken,
+		Token:      refreshTokenStr,
 		IsValid:    true,
 		ExpiresAt:  time.Now().Add(time.Duration(config.AppConfig.JWT.RefreshExpire) * time.Second),
 		DeviceInfo: userAgent,
+		CreatedAt:  time.Now(),
 	}
-	
-	err = s.adminRepo.CreateRefreshToken(refreshTokenEntity)
+
+	err = s.adminRepo.CreateRefreshToken(refreshToken)
 	if err != nil {
 		return nil, err
 	}
 
-	// 更新最后登录时间
+	// 6. 更新最后登录时间
 	err = s.adminRepo.UpdateLastLogin(admin.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 记录成功的登录会话
-	s.recordLoginSession(admin.ID, clientIP, userAgent, "success", "")
+	// 7. 记录登录会话并获取位置信息
+	sessionInfo := s.recordLoginSessionWithIPInfo(admin.ID, clientIP, userAgent, "success", "登录成功")
 
 	return &dto.AdminLoginResponse{
 		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		RefreshToken: refreshTokenStr,
 		ExpiresIn:    int64(config.AppConfig.JWT.AccessExpire),
 		TokenType:    "Bearer",
 		Admin:        *admin,
+		LoginSession: sessionInfo,
 	}, nil
 }
 
@@ -202,26 +240,101 @@ func (s *Service) GetUserByID(userID int64) (*entities.UserInfo, error) {
 
 // recordLoginSession 记录登录会话
 func (s *Service) recordLoginSession(adminID int64, ip, userAgent, status, reason string) {
+	s.recordLoginSessionWithIPInfo(adminID, ip, userAgent, status, reason)
+}
+
+func (s *Service) recordLoginSessionWithIPInfo(adminID int64, ip, userAgent, status, reason string) *dto.AdminLoginSessionInfo {
 	session := &entities.AdminLoginSession{
 		AdminID:   adminID,
 		IP:        ip,
 		UserAgent: userAgent,
 		Status:    status,
 		Reason:    reason,
-		// 其他字段可以后续解析userAgent等获得
-		Country:    "",
-		City:       "",
-		DeviceType: "",
-		OS:         "",
-		Browser:    "",
-		IsTrusted:  false,
-		Platform:   "",
+		CreatedAt: time.Now(),
 	}
+
+	// 获取IP地理位置信息
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	if ipInfo, err := s.ipinfoClient.GetIPInfo(ctx, ip); err == nil {
+		session.Country = ipInfo.Country
+		session.City = ipInfo.City
+		session.Region = ipInfo.Region
+		session.Timezone = ipInfo.Timezone
+		session.Organization = ipInfo.Org
+		session.Location = ipInfo.Loc
+	} else {
+		log.Printf("获取IP信息失败 %s: %v", ip, err)
+	}
+
+	// 解析User-Agent获取设备信息
+	s.parseUserAgent(session, userAgent)
 
 	err := s.adminRepo.CreateLoginSession(session)
 	if err != nil {
-		// 日志记录错误，但不影响主流程
-		// TODO: 使用proper logger
-		_ = err
+		log.Printf("记录管理员登录会话失败: %v", err)
+		return nil
+	}
+
+	// 返回会话信息给客户端
+	if status == "success" {
+		return &dto.AdminLoginSessionInfo{
+			IP:           session.IP,
+			Country:      session.Country,
+			City:         session.City,
+			Region:       session.Region,
+			Timezone:     session.Timezone,
+			Organization: session.Organization,
+			Location:     session.Location,
+			IsTrusted:    session.IsTrusted,
+		}
+	}
+	return nil
+}
+
+func (s *Service) parseUserAgent(session *entities.AdminLoginSession, userAgent string) {
+	ua := strings.ToLower(userAgent)
+	
+	// 检测设备类型
+	if strings.Contains(ua, "mobile") || strings.Contains(ua, "android") || strings.Contains(ua, "iphone") {
+		session.DeviceType = "mobile"
+	} else if strings.Contains(ua, "tablet") || strings.Contains(ua, "ipad") {
+		session.DeviceType = "tablet"
+	} else {
+		session.DeviceType = "desktop"
+	}
+	
+	// 检测操作系统
+	if strings.Contains(ua, "windows") {
+		session.OS = "Windows"
+	} else if strings.Contains(ua, "mac") || strings.Contains(ua, "darwin") {
+		session.OS = "macOS"
+	} else if strings.Contains(ua, "linux") {
+		session.OS = "Linux"
+	} else if strings.Contains(ua, "android") {
+		session.OS = "Android"
+	} else if strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad") || strings.Contains(ua, "ios") {
+		session.OS = "iOS"
+	}
+	
+	// 检测浏览器
+	if strings.Contains(ua, "chrome") && !strings.Contains(ua, "edge") {
+		session.Browser = "Chrome"
+	} else if strings.Contains(ua, "firefox") {
+		session.Browser = "Firefox"
+	} else if strings.Contains(ua, "safari") && !strings.Contains(ua, "chrome") {
+		session.Browser = "Safari"
+	} else if strings.Contains(ua, "edge") {
+		session.Browser = "Edge"
+	} else if strings.Contains(ua, "opera") {
+		session.Browser = "Opera"
+	}
+	
+	// 检测平台
+	if strings.Contains(ua, "mobile") || strings.Contains(ua, "android") || strings.Contains(ua, "iphone") {
+		session.Platform = "mobile"
+	} else {
+		session.Platform = "web"
 	}
 }
