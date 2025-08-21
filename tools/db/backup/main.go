@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"time"
+	"net/url"
+	"strings"
 
 	"trusioo_api/config"
 
@@ -15,7 +16,7 @@ import (
 
 func main() {
 	// Load environment variables
-	if err := godotenv.Load("../../.env"); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		log.Printf("Warning: .env file not found: %v", err)
 	}
 
@@ -52,12 +53,12 @@ func main() {
 	}
 }
 
-func createBackup(cfg *config.DatabaseConfig) {
+func createBackup(cfg config.DatabaseConfig) {
 	timestamp := time.Now().Format("20060102_150405")
-	backupFile := fmt.Sprintf("../../backups/backup_%s.sql", timestamp)
+	backupFile := fmt.Sprintf("backups/backup_%s.sql", timestamp)
 
 	// Create backups directory if it doesn't exist
-	if err := os.MkdirAll("../../backups", 0755); err != nil {
+	if err := os.MkdirAll("backups", 0755); err != nil {
 		log.Fatalf("Failed to create backups directory: %v", err)
 	}
 
@@ -81,8 +82,10 @@ func createBackup(cfg *config.DatabaseConfig) {
 	fmt.Println("💡 在执行危险迁移前建议先创建备份")
 }
 
-func restoreBackup(cfg *config.DatabaseConfig, backupFile string) {
+func restoreBackup(cfg config.DatabaseConfig, backupFile string) {
 	fmt.Printf("🔄 从备份恢复: %s\n", backupFile)
+	// 使用 cfg 以避免未使用参数，并提供目标数据库信息（不包含敏感信息）
+	fmt.Printf("📌 目标数据库: host=%s db=%s\n", cfg.Host, cfg.Name)
 	
 	// Check if backup file exists
 	if _, err := os.Stat(backupFile); os.IsNotExist(err) {
@@ -108,6 +111,14 @@ func restoreBackup(cfg *config.DatabaseConfig, backupFile string) {
 }
 
 func createSimpleBackup(connStr, backupFile string) error {
+	// 解析连接字符串以提取非敏感信息（主机、数据库名）
+	u, err := url.Parse(connStr)
+	if err != nil {
+		return fmt.Errorf("invalid connection string: %w", err)
+	}
+	host := u.Hostname()
+	dbName := strings.TrimPrefix(u.Path, "/")
+
 	// Create a simple backup file with metadata
 	content := fmt.Sprintf(`-- Trusioo API Database Backup
 -- Created: %s
@@ -131,9 +142,9 @@ func createSimpleBackup(connStr, backupFile string) error {
 
 `,
 		time.Now().Format("2006-01-02 15:04:05"),
-		config.AppConfig.Database.Name,
-		config.AppConfig.Database.Host,
-		config.AppConfig.Database.Name,
+		dbName,
+		host,
+		dbName,
 		time.Now().Format("2006-01-02 15:04:05"),
 	)
 

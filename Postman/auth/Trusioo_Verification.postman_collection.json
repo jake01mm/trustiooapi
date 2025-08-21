@@ -1,0 +1,380 @@
+{
+	"info": {
+		"_postman_id": "verification-collection-id",
+		"name": "Trusioo Verification API",
+		"description": "Trusioo 验证码模块 API 集合，包含发送验证码和验证验证码功能，支持注册、登录、重置密码等多种场景",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "验证码管理",
+			"description": "验证码发送和验证相关接口",
+			"item": [
+				{
+					"name": "发送验证码 - 注册场景",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"target\": \"{{verification_email}}\",\n  \"type\": \"register\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/verification/send",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "verification", "send"]
+						},
+						"description": "发送注册验证码到指定邮箱，用于用户注册流程"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has required fields', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('data');",
+									"    pm.expect(responseJson).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('expired_at');",
+									"});",
+									"",
+									"// 保存过期时间到环境变量",
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.data && responseJson.data.expired_at) {",
+									"        pm.environment.set('verification_expired_at', responseJson.data.expired_at);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "发送验证码 - 重置密码场景",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"target\": \"{{verification_email}}\",\n  \"type\": \"reset_password\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/verification/send",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "verification", "send"]
+						},
+						"description": "发送重置密码验证码到指定邮箱，用于密码重置流程"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has required fields', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('data');",
+									"    pm.expect(responseJson).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('expired_at');",
+									"});",
+									"",
+									"// 保存过期时间到环境变量",
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.data && responseJson.data.expired_at) {",
+									"        pm.environment.set('verification_expired_at', responseJson.data.expired_at);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "发送验证码 - 忘记密码场景",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"target\": \"{{verification_email}}\",\n  \"type\": \"forgot_password\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/verification/send",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "verification", "send"]
+						},
+						"description": "发送忘记密码验证码到指定邮箱，用于找回密码流程"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has required fields', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('data');",
+									"    pm.expect(responseJson).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('expired_at');",
+									"});",
+									"",
+									"// 保存过期时间到环境变量",
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.data && responseJson.data.expired_at) {",
+									"        pm.environment.set('verification_expired_at', responseJson.data.expired_at);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "验证码验证",
+			"description": "验证码校验相关接口",
+			"item": [
+				{
+					"name": "验证验证码 - 注册场景",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"target\": \"{{verification_email}}\",\n  \"type\": \"register\",\n  \"code\": \"{{verification_code}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/verification/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "verification", "verify"]
+						},
+						"description": "验证注册场景的验证码是否正确"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has required fields', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('data');",
+									"    pm.expect(responseJson).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('valid');",
+									"});",
+									"",
+									"pm.test('Verification is valid', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson.data.valid).to.be.true;",
+									"});",
+									"",
+									"// 保存验证结果到环境变量",
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.data) {",
+									"        pm.environment.set('verification_valid', responseJson.data.valid);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "验证验证码 - 重置密码场景",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"target\": \"{{verification_email}}\",\n  \"type\": \"reset_password\",\n  \"code\": \"{{verification_code}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/verification/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "verification", "verify"]
+						},
+						"description": "验证重置密码场景的验证码是否正确"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has required fields', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('data');",
+									"    pm.expect(responseJson).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('valid');",
+									"});",
+									"",
+									"pm.test('Verification is valid', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson.data.valid).to.be.true;",
+									"});",
+									"",
+									"// 保存验证结果到环境变量",
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.data) {",
+									"        pm.environment.set('verification_valid', responseJson.data.valid);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "验证验证码 - 忘记密码场景",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"target\": \"{{verification_email}}\",\n  \"type\": \"forgot_password\",\n  \"code\": \"{{verification_code}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/verification/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "verification", "verify"]
+						},
+						"description": "验证忘记密码场景的验证码是否正确"
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has required fields', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('data');",
+									"    pm.expect(responseJson).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('message');",
+									"    pm.expect(responseJson.data).to.have.property('valid');",
+									"});",
+									"",
+									"pm.test('Verification is valid', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson.data.valid).to.be.true;",
+									"});",
+									"",
+									"// 保存验证结果到环境变量",
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.data) {",
+									"        pm.environment.set('verification_valid', responseJson.data.valid);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// 全局预请求脚本",
+					"console.log('执行验证码请求:', pm.info.requestName);"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// 全局测试脚本",
+					"pm.test('Response time is less than 5000ms', function () {",
+					"    pm.expect(pm.response.responseTime).to.be.below(5000);",
+					"});"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		}
+	]
+}

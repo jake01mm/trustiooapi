@@ -19,7 +19,6 @@ type Verification struct {
 // VerificationType 验证码类型常量
 const (
 	TypeRegister       = "register"
-	TypeLogin          = "login"
 	TypeResetPassword  = "reset_password"
 	TypeForgotPassword = "forgot_password"
 )

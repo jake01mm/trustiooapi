@@ -16,7 +16,7 @@ import (
 
 func main() {
 	// Load environment variables
-	if err := godotenv.Load("../../.env"); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		log.Printf("Warning: .env file not found: %v", err)
 	}
 
@@ -56,7 +56,7 @@ func main() {
 	}
 
 	// Create migrate instance
-	migrationsPath := "file://../../migrations"
+	migrationsPath := "file://migrations"
 	m, err := migrate.NewWithDatabaseInstance(migrationsPath, "postgres", driver)
 	if err != nil {
 		log.Fatalf("Failed to create migrate instance: %v", err)

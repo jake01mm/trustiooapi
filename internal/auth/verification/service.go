@@ -72,8 +72,8 @@ func (s *Service) activateUserAccount(email string) error {
 
 // SendVerificationCode 发送验证码
 func (s *Service) SendVerificationCode(req *dto.SendVerificationRequest) (*dto.SendVerificationResponse, error) {
-	// 对于激活类型的验证码，需要检查用户是否存在于数据库中
-	if req.Type == "activate" {
+	// 对于注册类型的验证码，需要检查用户是否存在于数据库中
+	if req.Type == "register" {
 		exists, _, err := s.checkUserExists(req.Target, "user")
 		if err != nil {
 			return nil, fmt.Errorf("failed to check user existence: %w", err)
@@ -128,6 +128,7 @@ func (s *Service) SendVerificationCode(req *dto.SendVerificationRequest) (*dto.S
 	return &dto.SendVerificationResponse{
 		Message:   "Verification code sent successfully",
 		ExpiredAt: expiredAt.Format(time.RFC3339),
+		Code:      code, // 仅用于测试环境
 	}, nil
 }
 
@@ -152,8 +153,8 @@ func (s *Service) VerifyCode(req *dto.VerifyCodeRequest) (*dto.VerifyCodeRespons
 		return nil, fmt.Errorf("failed to mark verification as used: %w", err)
 	}
 
-	// 如果是激活类型的验证码，激活用户账户
-	if req.Type == "activate" {
+	// 如果是注册类型的验证码，激活用户账户
+	if req.Type == "register" {
 		err = s.activateUserAccount(req.Target)
 		if err != nil {
 			return nil, fmt.Errorf("failed to activate user account: %w", err)

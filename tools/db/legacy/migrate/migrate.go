@@ -23,7 +23,7 @@ func main() {
 	defer database.CloseDatabase()
 
 	// 读取 SQL 文件
-	sqlContent, err := os.ReadFile("scripts/init_db.sql")
+	sqlContent, err := os.ReadFile("../../../scripts/legacy/init_db.sql")
 	if err != nil {
 		log.Fatalf("Failed to read SQL file: %v", err)
 	}

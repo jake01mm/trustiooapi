@@ -20,7 +20,7 @@ import (
 
 func main() {
 	// Load environment variables
-	if err := godotenv.Load("../../.env"); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		log.Printf("Warning: .env file not found: %v", err)
 	}
 
@@ -67,7 +67,7 @@ func main() {
 
 func createMigration(name string) {
 	// Get next migration number
-	migrationsDir := "../../migrations"
+	migrationsDir := "migrations"
 	files, err := filepath.Glob(filepath.Join(migrationsDir, "*.up.sql"))
 	if err != nil {
 		log.Fatalf("Failed to read migrations directory: %v", err)
@@ -145,7 +145,7 @@ func runMigration(action string, steps, version, forceVersion int) {
 	}
 
 	// Create migrate instance
-	migrationsPath := "file://../../migrations"
+	migrationsPath := "file://migrations"
 	m, err := migrate.NewWithDatabaseInstance(migrationsPath, "postgres", driver)
 	if err != nil {
 		log.Fatalf("Failed to create migrate instance: %v", err)

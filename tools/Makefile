@@ -30,43 +30,43 @@ help:
 
 db-init:
 	@echo "🔧 初始化数据库和迁移系统..."
-	@cd db && go run init.go
+	@go run db/init/main.go
 
 db-migrate:
 	@echo "🚀 执行数据库迁移..."
-	@cd db && go run migrate_new.go -action=up
+	@go run db/migrate/main.go -action=up
 
 db-rollback:
 	@echo "⬇️  回滚最后一个迁移..."
-	@cd db && go run migrate_new.go -action=down -steps=1
+	@go run db/migrate/main.go -action=down -steps=1
 
 db-rollback-n:
 	@echo "⬇️  回滚 $(N) 个迁移..."
-	@cd db && go run migrate_new.go -action=down -steps=$(N)
+	@go run db/migrate/main.go -action=down -steps=$(N)
 
 db-status:
-	@cd db && go run status.go
+	@go run db/status/main.go
 
 db-create:
 	@echo "📝 创建新迁移: $(NAME)"
-	@cd db && go run migrate_new.go -action=create -name="$(NAME)"
+	@go run db/migrate/main.go -action=create -name="$(NAME)"
 
 db-force:
 	@echo "⚡ 强制设置迁移版本到 $(N)..."
-	@cd db && go run migrate_new.go -action=force -force=$(N)
+	@go run db/migrate/main.go -action=force -force=$(N)
 
 db-drop:
 	@echo "🗑️  删除所有表..."
 	@read -p "确定要删除所有表吗？这将清空整个数据库！输入 'yes' 确认: " confirm && [ "$$confirm" = "yes" ]
-	@cd db && go run migrate_new.go -action=drop
+	@go run db/migrate/main.go -action=drop
 
 db-backup:
 	@echo "📦 创建数据库备份..."
-	@cd db && go run backup.go -action=backup
+	@go run db/backup/main.go -action=backup
 
 db-restore:
 	@echo "🔄 从备份恢复数据库..."
-	@cd db && go run backup.go -action=restore -file="$(FILE)"
+	@go run db/backup/main.go -action=restore -file="$(FILE)"
 
 db-test:
 	@echo "测试数据库连接..."
@@ -82,4 +82,4 @@ admin-check:
 
 debug-data:
 	@echo "检查表数据..."
-	@go run debug/check_data.go
+	@go run debug/check_data/main.go

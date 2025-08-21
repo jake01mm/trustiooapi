@@ -2,8 +2,11 @@ package user_auth
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"fmt"
 	"log"
+	"math/big"
 	"strings"
 	"time"
 
@@ -11,9 +14,9 @@ import (
 	"trusioo_api/internal/auth/user_auth/dto"
 	"trusioo_api/internal/auth/user_auth/entities"
 	"trusioo_api/internal/auth/verification"
-	verificationDto "trusioo_api/internal/auth/verification/dto"
 	"trusioo_api/internal/common"
 	"trusioo_api/pkg/auth"
+	"trusioo_api/pkg/database"
 	"trusioo_api/pkg/ipinfo"
 
 	"golang.org/x/crypto/bcrypt"
@@ -114,6 +117,44 @@ func (s *Service) PreAuth(req *dto.PreAuthRequest) (*dto.PreAuthResponse, error)
 	}, nil
 }
 
+// generateLoginCode 生成6位数字登录验证码
+func (s *Service) generateLoginCode() (string, error) {
+	code := ""
+	for i := 0; i < 6; i++ {
+		n, err := rand.Int(rand.Reader, big.NewInt(10))
+		if err != nil {
+			return "", err
+		}
+		code += n.String()
+	}
+	return code, nil
+}
+
+// saveLoginCode 保存登录验证码到数据库
+func (s *Service) saveLoginCode(email, code string) error {
+	query := `
+		INSERT INTO login_codes (email, code, is_used, expired_at, created_at)
+		VALUES ($1, $2, false, $3, $4)
+	`
+	expiredAt := time.Now().Add(10 * time.Minute)
+	createdAt := time.Now()
+	
+	_, err := database.DB.Exec(query, email, code, expiredAt, createdAt)
+	return err
+}
+
+// sendLoginCodeEmail 发送登录验证码邮件（模拟实现）
+func (s *Service) sendLoginCodeEmail(email, code string) error {
+	// 将验证码打印到控制台，方便测试
+	log.Printf("=== 登录验证码发送 ===")
+	log.Printf("邮箱: %s", email)
+	log.Printf("验证码: %s", code)
+	log.Printf("==================")
+
+	// TODO: 集成真实的邮件服务
+	return nil
+}
+
 // Login 第一步登录 - 验证email+password并发送登录验证码
 func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto.LoginCodeResponse, error) {
 	// 1. 验证email+password
@@ -139,21 +180,54 @@ func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto
 		return nil, common.ErrUserInactive
 	}
 
-	// 2. 发送登录验证码
-	sendReq := &verificationDto.SendVerificationRequest{
-		Target: req.Email,
-		Type:   "login",
-	}
-	_, err = s.verificationService.SendVerificationCode(sendReq)
+	// 2. 生成登录验证码
+	code, err := s.generateLoginCode()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate login code: %w", err)
+	}
+
+	// 3. 保存验证码到数据库
+	err = s.saveLoginCode(req.Email, code)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save login code: %w", err)
+	}
+
+	// 4. 发送验证码邮件
+	err = s.sendLoginCodeEmail(req.Email, code)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send login code email: %w", err)
 	}
 
 	return &dto.LoginCodeResponse{
 		Message:   "登录验证码已发送",
-		LoginCode: "已发送到邮箱",
+		LoginCode: code, // 仅在开发环境返回，生产环境应该移除
 		ExpiresIn: 600, // 10分钟
 	}, nil
+}
+
+// verifyLoginCode 验证登录验证码
+func (s *Service) verifyLoginCode(email, code string) (bool, error) {
+	query := `
+		SELECT id FROM login_codes 
+		WHERE email = $1 AND code = $2 AND is_used = false AND expired_at > NOW()
+	`
+	var id int64
+	err := database.DB.QueryRow(query, email, code).Scan(&id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil // 验证码无效或已过期
+		}
+		return false, err // 数据库错误
+	}
+
+	// 标记验证码为已使用
+	updateQuery := `UPDATE login_codes SET is_used = true WHERE id = $1`
+	_, err = database.DB.Exec(updateQuery, id)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // LoginVerify 第二步登录 - 验证登录验证码并返回token
@@ -167,19 +241,14 @@ func (s *Service) LoginVerify(req *dto.LoginVerifyRequest, clientIP, userAgent s
 		return nil, err
 	}
 
-	// 2. 验证验证码
-	verifyReq := &verificationDto.VerifyCodeRequest{
-		Target: req.Email,
-		Code:   req.Code,
-		Type:   "login",
-	}
-	verifyResp, err := s.verificationService.VerifyCode(verifyReq)
+	// 2. 验证登录验证码
+	valid, err := s.verifyLoginCode(req.Email, req.Code)
 	if err != nil {
-		s.recordLoginSession(user.ID, clientIP, userAgent, "email", "failed", "验证码错误")
-		return nil, err
+		s.recordLoginSession(user.ID, clientIP, userAgent, "email", "failed", "验证码验证失败")
+		return nil, fmt.Errorf("failed to verify login code: %w", err)
 	}
-	if !verifyResp.Valid {
-		s.recordLoginSession(user.ID, clientIP, userAgent, "email", "failed", "验证码无效")
+	if !valid {
+		s.recordLoginSession(user.ID, clientIP, userAgent, "email", "failed", "验证码无效或已过期")
 		return nil, common.ErrInvalidCode
 	}
 

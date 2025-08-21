@@ -14,14 +14,21 @@ type Config struct {
 	Server   ServerConfig
 	CORS     CORSConfig
 	Frontend FrontendConfig
+	Security SecurityConfig
+	RateLimit RateLimitConfig
+	Request  RequestConfig
+	ThirdParty ThirdPartyConfig
 }
 
 type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Name     string
+	Host           string
+	Port           string
+	User           string
+	Password       string
+	Name           string
+	MaxOpenConns   int
+	MaxIdleConns   int
+	ConnMaxLifetime int
 }
 
 type JWTConfig struct {
@@ -46,6 +53,36 @@ type FrontendConfig struct {
 	AdminURL string
 }
 
+type SecurityConfig struct {
+	EnableHTTPS        bool
+	TLSCertFile        string
+	TLSKeyFile         string
+	EnableSecureHeaders bool
+	TrustedProxies     []string
+}
+
+type RateLimitConfig struct {
+	Enabled           bool
+	Requests          int
+	Window            int
+	AuthRequests      int
+	AuthWindow        int
+}
+
+type RequestConfig struct {
+	Timeout        int
+	MaxSize        int64
+	EnableRequestID bool
+}
+
+type ThirdPartyConfig struct {
+	CardDetectionEnabled    bool
+	CardDetectionHost       string
+	CardDetectionAppID      string
+	CardDetectionAppSecret  string
+	CardDetectionTimeout    int
+}
+
 var AppConfig *Config
 
 func LoadConfig() error {
@@ -57,15 +94,18 @@ func LoadConfig() error {
 
 	AppConfig = &Config{
 		Database: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "5432"),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", ""),
-			Name:     getEnv("DB_NAME", "trusioo_db"),
+			Host:           getEnv("DB_HOST", "localhost"),
+			Port:           getEnv("DB_PORT", "5432"),
+			User:           getEnv("DB_USER", "postgres"),
+			Password:       getEnv("DB_PASSWORD", ""),
+			Name:           getEnv("DB_NAME", "trusioo_db"),
+			MaxOpenConns:   getEnvAsInt("DB_MAX_OPEN_CONNS", 25),
+			MaxIdleConns:   getEnvAsInt("DB_MAX_IDLE_CONNS", 5),
+			ConnMaxLifetime: getEnvAsInt("DB_CONN_MAX_LIFETIME", 300),
 		},
 		JWT: JWTConfig{
-			Secret:        getEnv("JWT_SECRET", "your_jwt_secret"),
-			RefreshSecret: getEnv("JWT_REFRESH_SECRET", "your_refresh_secret"),
+			Secret:        getEnv("JWT_SECRET", "change-this-to-a-secure-secret-key"),
+			RefreshSecret: getEnv("JWT_REFRESH_SECRET", "change-this-to-a-secure-refresh-key"),
 			AccessExpire:  getEnvAsInt("JWT_ACCESS_EXPIRE", 7200),
 			RefreshExpire: getEnvAsInt("JWT_REFRESH_EXPIRE", 604800),
 		},
@@ -80,6 +120,32 @@ func LoadConfig() error {
 		Frontend: FrontendConfig{
 			AppURL:   getEnv("FRONTEND_APP_URL", "http://localhost:3000"),
 			AdminURL: getEnv("FRONTEND_ADMIN_URL", "http://localhost:3001"),
+		},
+		Security: SecurityConfig{
+			EnableHTTPS:        getEnvAsBool("FORCE_HTTPS", false),
+			TLSCertFile:        getEnv("TLS_CERT_FILE", ""),
+			TLSKeyFile:         getEnv("TLS_KEY_FILE", ""),
+			EnableSecureHeaders: getEnvAsBool("ENABLE_SECURE_HEADERS", true),
+			TrustedProxies:     strings.Split(getEnv("TRUSTED_PROXIES", ""), ","),
+		},
+		RateLimit: RateLimitConfig{
+			Enabled:      getEnvAsBool("RATE_LIMIT_ENABLED", true),
+			Requests:     getEnvAsInt("RATE_LIMIT_REQUESTS", 100),
+			Window:       getEnvAsInt("RATE_LIMIT_WINDOW", 60),
+			AuthRequests: getEnvAsInt("AUTH_RATE_LIMIT_REQUESTS", 10),
+			AuthWindow:   getEnvAsInt("AUTH_RATE_LIMIT_WINDOW", 60),
+		},
+		Request: RequestConfig{
+			Timeout:        getEnvAsInt("REQUEST_TIMEOUT", 30),
+			MaxSize:        getEnvAsInt64("MAX_REQUEST_SIZE", 10485760), // 10MB
+			EnableRequestID: getEnvAsBool("ENABLE_REQUEST_ID", true),
+		},
+		ThirdParty: ThirdPartyConfig{
+			CardDetectionEnabled:   getEnvAsBool("CARD_DETECTION_ENABLED", false),
+			CardDetectionHost:      getEnv("CARD_DETECTION_HOST", ""),
+			CardDetectionAppID:     getEnv("CARD_DETECTION_APP_ID", ""),
+			CardDetectionAppSecret: getEnv("CARD_DETECTION_APP_SECRET", ""),
+			CardDetectionTimeout:   getEnvAsInt("CARD_DETECTION_TIMEOUT", 30),
 		},
 	}
 
@@ -105,6 +171,14 @@ func getEnvAsBool(name string, defaultVal bool) bool {
 	valStr := getEnv(name, "")
 	if val, err := strconv.ParseBool(valStr); err == nil {
 		return val
+	}
+	return defaultVal
+}
+
+func getEnvAsInt64(name string, defaultVal int64) int64 {
+	valueStr := getEnv(name, "")
+	if value, err := strconv.ParseInt(valueStr, 10, 64); err == nil {
+		return value
 	}
 	return defaultVal
 }
