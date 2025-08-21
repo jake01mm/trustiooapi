@@ -338,3 +338,92 @@ func (s *Service) parseUserAgent(session *entities.AdminLoginSession, userAgent 
 		session.Platform = "web"
 	}
 }
+
+// ForgotPassword 管理员忘记密码 - 发送重置密码验证码
+func (s *Service) ForgotPassword(req *dto.AdminForgotPasswordRequest) (*dto.AdminForgotPasswordResponse, error) {
+	// 1. 验证管理员是否存在
+	admin, err := s.adminRepo.GetByEmail(req.Email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// 为了安全，即使管理员不存在也返回成功，避免暴露管理员是否存在
+			return &dto.AdminForgotPasswordResponse{
+				Message:   "如果该邮箱已注册为管理员，重置密码验证码已发送",
+				ExpiresIn: 600,
+			}, nil
+		}
+		return nil, err
+	}
+
+	// 2. 检查管理员状态
+	if admin.Status != "active" {
+		// 为了安全，不暴露账户状态信息
+		return &dto.AdminForgotPasswordResponse{
+			Message:   "如果该邮箱已注册为管理员，重置密码验证码已发送",
+			ExpiresIn: 600,
+		}, nil
+	}
+
+	// 3. 发送重置密码验证码
+	sendReq := &verificationDto.SendVerificationRequest{
+		Target: req.Email,
+		Type:   "admin_forgot_password",
+	}
+	_, err = s.verificationService.SendVerificationCode(sendReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.AdminForgotPasswordResponse{
+		Message:   "管理员重置密码验证码已发送到您的邮箱",
+		ExpiresIn: 600, // 10分钟
+	}, nil
+}
+
+// ResetPassword 管理员重置密码 - 验证验证码并重置密码
+func (s *Service) ResetPassword(req *dto.AdminResetPasswordRequest) (*dto.AdminResetPasswordResponse, error) {
+	// 1. 验证管理员是否存在
+	admin, err := s.adminRepo.GetByEmail(req.Email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, common.ErrAdminNotFound
+		}
+		return nil, err
+	}
+
+	// 2. 验证重置密码验证码
+	verifyReq := &verificationDto.VerifyCodeRequest{
+		Target: req.Email,
+		Code:   req.Code,
+		Type:   "admin_forgot_password",
+	}
+	verifyResp, err := s.verificationService.VerifyCode(verifyReq)
+	if err != nil {
+		return nil, err
+	}
+	if !verifyResp.Valid {
+		return nil, common.ErrInvalidCode
+	}
+
+	// 3. 加密新密码
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. 更新密码
+	err = s.adminRepo.UpdatePassword(admin.ID, string(hashedPassword))
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. 可选：使所有refresh token失效，强制重新登录
+	err = s.adminRepo.InvalidateAllRefreshTokens(admin.ID)
+	if err != nil {
+		log.Printf("Failed to invalidate refresh tokens for admin %d: %v", admin.ID, err)
+		// 不返回错误，因为密码已经重置成功
+	}
+
+	return &dto.AdminResetPasswordResponse{
+		Message: "管理员密码重置成功，请使用新密码登录",
+	}, nil
+}

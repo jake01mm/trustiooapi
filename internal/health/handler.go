@@ -167,6 +167,190 @@ func getGoroutineCount() int {
 	return runtime.NumGoroutine()
 }
 
+// DetailedHealthCheck 详细健康检查处理器
+func DetailedHealthCheck(c *gin.Context) {
+	logger.WithRequest(c.Request.Method, c.Request.URL.Path, c.ClientIP()).
+		Info("Detailed health check requested")
+
+	services := make(map[string]interface{})
+	
+	// 数据库详细检查
+	dbHealth := getDetailedDatabaseHealth()
+	services["database"] = dbHealth
+	
+	// Redis检查（如果配置了）
+	redisHealth := getRedisHealth()
+	if redisHealth != nil {
+		services["redis"] = redisHealth
+	}
+	
+	// 系统指标
+	services["system"] = map[string]interface{}{
+		"memory":     getMemoryUsage(),
+		"goroutines": getGoroutineCount(),
+		"uptime":     time.Since(startTime).String(),
+		"uptime_seconds": time.Since(startTime).Seconds(),
+	}
+
+	// 计算整体健康状态
+	overallStatus := "healthy"
+	for _, serviceData := range services {
+		if serviceMap, ok := serviceData.(map[string]interface{}); ok {
+			if status, exists := serviceMap["status"]; exists && status != "healthy" {
+				overallStatus = "degraded"
+				if status == "unhealthy" {
+					overallStatus = "unhealthy"
+					break
+				}
+			}
+		}
+	}
+
+	response := map[string]interface{}{
+		"status":    overallStatus,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"version":   "1.0.0",
+		"uptime":    time.Since(startTime).String(),
+		"services":  services,
+	}
+
+	statusCode := http.StatusOK
+	if overallStatus == "unhealthy" {
+		statusCode = http.StatusServiceUnavailable
+	} else if overallStatus == "degraded" {
+		statusCode = http.StatusPartialContent
+	}
+
+	c.JSON(statusCode, response)
+}
+
+// DatabaseHealthCheck 数据库专用健康检查处理器
+func DatabaseHealthCheck(c *gin.Context) {
+	logger.WithRequest(c.Request.Method, c.Request.URL.Path, c.ClientIP()).
+		Info("Database health check requested")
+
+	dbHealth := getDetailedDatabaseHealth()
+	
+	statusCode := http.StatusOK
+	if dbHealth["status"] != "healthy" {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	c.JSON(statusCode, dbHealth)
+}
+
+// RedisHealthCheck Redis专用健康检查处理器  
+func RedisHealthCheck(c *gin.Context) {
+	logger.WithRequest(c.Request.Method, c.Request.URL.Path, c.ClientIP()).
+		Info("Redis health check requested")
+
+	redisHealth := getRedisHealth()
+	
+	if redisHealth == nil {
+		c.JSON(http.StatusNotImplemented, map[string]interface{}{
+			"status":  "not_configured",
+			"message": "Redis is not configured for this application",
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		})
+		return
+	}
+
+	statusCode := http.StatusOK
+	if redisHealth["status"] != "healthy" {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	c.JSON(statusCode, redisHealth)
+}
+
+// getDetailedDatabaseHealth 获取详细的数据库健康信息
+func getDetailedDatabaseHealth() map[string]interface{} {
+	health := map[string]interface{}{
+		"status": checkDatabase(),
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// 添加连接池统计信息
+	if DB := database.GetStdDB(); DB != nil {
+		stats := DB.Stats()
+		health["connection_pool"] = map[string]interface{}{
+			"max_open_connections":     stats.MaxOpenConnections,
+			"open_connections":         stats.OpenConnections,
+			"in_use":                  stats.InUse,
+			"idle":                    stats.Idle,
+			"wait_count":              stats.WaitCount,
+			"wait_duration_ms":        stats.WaitDuration.Milliseconds(),
+			"max_idle_closed":         stats.MaxIdleClosed,
+			"max_idle_time_closed":    stats.MaxIdleTimeClosed,
+			"max_lifetime_closed":     stats.MaxLifetimeClosed,
+		}
+
+		// 测试查询响应时间
+		start := time.Now()
+		var result int
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		
+		err := DB.QueryRowContext(ctx, "SELECT 1").Scan(&result)
+		queryDuration := time.Since(start)
+		
+		health["query_test"] = map[string]interface{}{
+			"duration_ms": queryDuration.Milliseconds(),
+			"success":    err == nil,
+		}
+		
+		if err != nil {
+			health["query_test"].(map[string]interface{})["error"] = err.Error()
+			health["status"] = "unhealthy"
+		}
+	} else {
+		health["status"] = "unavailable"
+		health["error"] = "Database connection is nil"
+	}
+
+	return health
+}
+
+// getRedisHealth 获取Redis健康信息（如果配置了Redis）
+func getRedisHealth() map[string]interface{} {
+	// 注意：这里假设Redis是可选的
+	// 如果没有配置Redis，返回nil
+	// 实际项目中，你可能需要根据配置来决定是否检查Redis
+	
+	// TODO: 实现Redis健康检查
+	// 目前返回nil表示Redis未配置
+	return nil
+	
+	// 以下是Redis健康检查的示例实现（当你配置了Redis时取消注释）
+	/*
+	health := map[string]interface{}{
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+	
+	// 这里需要你的Redis客户端实例
+	// rdb := redis.GetClient() // 假设你有这样的函数
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	
+	start := time.Now()
+	// pong, err := rdb.Ping(ctx).Result()
+	// pingDuration := time.Since(start)
+	
+	health["ping_duration_ms"] = pingDuration.Milliseconds()
+	
+	if err != nil {
+		health["status"] = "unhealthy"
+		health["error"] = err.Error()
+	} else {
+		health["status"] = "healthy"
+		health["ping_response"] = pong
+	}
+	
+	return health
+	*/
+}
+
 // bToMb 字节转MB
 func bToMb(b uint64) uint64 {
 	return b / 1024 / 1024

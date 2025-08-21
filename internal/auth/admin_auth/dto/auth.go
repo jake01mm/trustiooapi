@@ -47,3 +47,26 @@ type AdminLoginSessionInfo struct {
 type RefreshTokenRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
+
+// AdminForgotPasswordRequest 管理员忘记密码请求
+type AdminForgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+// AdminForgotPasswordResponse 管理员忘记密码响应
+type AdminForgotPasswordResponse struct {
+	Message   string `json:"message"`
+	ExpiresIn int    `json:"expires_in"` // 秒
+}
+
+// AdminResetPasswordRequest 管理员重置密码请求
+type AdminResetPasswordRequest struct {
+	Email    string `json:"email" binding:"required,email"`
+	Code     string `json:"code" binding:"required,len=6"`
+	Password string `json:"password" binding:"required,min=6"`
+}
+
+// AdminResetPasswordResponse 管理员重置密码响应
+type AdminResetPasswordResponse struct {
+	Message string `json:"message"`
+}

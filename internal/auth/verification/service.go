@@ -72,26 +72,7 @@ func (s *Service) activateUserAccount(email string) error {
 
 // SendVerificationCode 发送验证码
 func (s *Service) SendVerificationCode(req *dto.SendVerificationRequest) (*dto.SendVerificationResponse, error) {
-	// 对于注册类型的验证码，需要检查用户是否存在于数据库中
-	if req.Type == "register" {
-		exists, _, err := s.checkUserExists(req.Target, "user")
-		if err != nil {
-			return nil, fmt.Errorf("failed to check user existence: %w", err)
-		}
-		if !exists {
-			return nil, fmt.Errorf("user not found in database, please register first")
-		}
-	}
 
-	// 检查发送频率限制（60秒内不能重复发送）
-	recentVerification, err := s.repo.GetRecentVerification(req.Target, req.Type, time.Minute)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check recent verification: %w", err)
-	}
-
-	if recentVerification != nil {
-		return nil, fmt.Errorf("verification code was sent recently, please wait before requesting again")
-	}
 
 	// 生成6位数字验证码
 	code, err := s.generateVerificationCode()
@@ -153,13 +134,6 @@ func (s *Service) VerifyCode(req *dto.VerifyCodeRequest) (*dto.VerifyCodeRespons
 		return nil, fmt.Errorf("failed to mark verification as used: %w", err)
 	}
 
-	// 如果是注册类型的验证码，激活用户账户
-	if req.Type == "register" {
-		err = s.activateUserAccount(req.Target)
-		if err != nil {
-			return nil, fmt.Errorf("failed to activate user account: %w", err)
-		}
-	}
 
 	return &dto.VerifyCodeResponse{
 		Message: "Verification code is valid",

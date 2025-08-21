@@ -193,3 +193,64 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	common.Success(c, user)
 }
 
+// ForgotPassword 忘记密码第一步 - 发送重置密码验证码
+// @Summary 忘记密码第一步
+// @Description 发送重置密码验证码到用户邮箱
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body ForgotPasswordRequest true "忘记密码请求参数"
+// @Success 200 {object} common.Response{data=ForgotPasswordResponse} "验证码发送成功"
+// @Failure 400 {object} common.Response "参数错误"
+// @Failure 500 {object} common.Response "服务器错误"
+// @Router /api/v1/auth/forgot-password [post]
+func (h *Handler) ForgotPassword(c *gin.Context) {
+	var req dto.ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ValidationError(c, err.Error())
+		return
+	}
+
+	resp, err := h.service.ForgotPassword(&req)
+	if err != nil {
+		common.ServerError(c, err)
+		return
+	}
+
+	common.Success(c, resp)
+}
+
+// ResetPassword 忘记密码第二步 - 验证验证码并重置密码
+// @Summary 忘记密码第二步
+// @Description 验证重置密码验证码并设置新密码
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body ResetPasswordRequest true "重置密码请求参数"
+// @Success 200 {object} common.Response{data=ResetPasswordResponse} "密码重置成功"
+// @Failure 400 {object} common.Response "参数错误或验证失败"
+// @Failure 500 {object} common.Response "服务器错误"
+// @Router /api/v1/auth/reset-password [post]
+func (h *Handler) ResetPassword(c *gin.Context) {
+	var req dto.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ValidationError(c, err.Error())
+		return
+	}
+
+	resp, err := h.service.ResetPassword(&req)
+	if err != nil {
+		switch err {
+		case common.ErrUserNotFound:
+			common.ValidationError(c, "User not found")
+		case common.ErrInvalidCode:
+			common.ValidationError(c, "Invalid or expired verification code")
+		default:
+			common.ServerError(c, err)
+		}
+		return
+	}
+
+	common.Success(c, resp)
+}
+

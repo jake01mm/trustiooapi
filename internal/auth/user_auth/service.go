@@ -2,11 +2,8 @@ package user_auth
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"fmt"
 	"log"
-	"math/big"
 	"strings"
 	"time"
 
@@ -14,9 +11,9 @@ import (
 	"trusioo_api/internal/auth/user_auth/dto"
 	"trusioo_api/internal/auth/user_auth/entities"
 	"trusioo_api/internal/auth/verification"
+	verificationDto "trusioo_api/internal/auth/verification/dto"
 	"trusioo_api/internal/common"
 	"trusioo_api/pkg/auth"
-	"trusioo_api/pkg/database"
 	"trusioo_api/pkg/ipinfo"
 
 	"golang.org/x/crypto/bcrypt"
@@ -55,18 +52,22 @@ func (s *Service) Register(req *dto.RegisterRequest) (*dto.RegisterResponse, err
 		return nil, err
 	}
 
-	// 创建用户 - 默认未激活状态
+	// 创建用户 - 状态为激活但邮箱未验证
 	user := &entities.User{
-		Name:          "", // 注册时不需要姓名
-		Email:         req.Email,
-		Password:      string(hashedPassword),
-		Phone:         nil, // 注册时不需要手机号
-		Role:          "user",
-		Status:        "inactive", // 默认未激活
-		EmailVerified: false,      // 默认未验证
-		PhoneVerified: false,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		Name:             "", // 注册时不需要姓名
+		Email:            req.Email,
+		Password:         string(hashedPassword),
+		Phone:            nil, // 注册时不需要手机号
+		ImageKey:         "",
+		Role:             "user",
+		Status:           "active", // 允许登录
+		EmailVerified:    false,    // 需要通过登录验证码验证邮箱
+		PhoneVerified:    false,
+		AutoRegistered:   false,
+		ProfileCompleted: false,
+		PasswordSet:      true, // 密码已设置
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 
 	err = s.repo.Create(user)
@@ -79,81 +80,6 @@ func (s *Service) Register(req *dto.RegisterRequest) (*dto.RegisterResponse, err
 	}, nil
 }
 
-// PreAuth 预验证email+password，验证通过后可发送验证码
-func (s *Service) PreAuth(req *dto.PreAuthRequest) (*dto.PreAuthResponse, error) {
-	// 根据邮箱获取用户
-	user, err := s.repo.GetByEmail(req.Email)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return &dto.PreAuthResponse{
-				Message:  "邮箱或密码错误",
-				Verified: false,
-			}, nil
-		}
-		return nil, err
-	}
-
-	// 验证密码
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
-	if err != nil {
-		return &dto.PreAuthResponse{
-			Message:  "邮箱或密码错误",
-			Verified: false,
-		}, nil
-	}
-
-	// 检查用户状态
-	if user.Status != "active" {
-		return &dto.PreAuthResponse{
-			Message:  "账户已禁用",
-			Verified: false,
-		}, nil
-	}
-
-	return &dto.PreAuthResponse{
-		Message:  "预验证成功，可以发送验证码",
-		Verified: true,
-		Email:    req.Email,
-	}, nil
-}
-
-// generateLoginCode 生成6位数字登录验证码
-func (s *Service) generateLoginCode() (string, error) {
-	code := ""
-	for i := 0; i < 6; i++ {
-		n, err := rand.Int(rand.Reader, big.NewInt(10))
-		if err != nil {
-			return "", err
-		}
-		code += n.String()
-	}
-	return code, nil
-}
-
-// saveLoginCode 保存登录验证码到数据库
-func (s *Service) saveLoginCode(email, code string) error {
-	query := `
-		INSERT INTO login_codes (email, code, is_used, expired_at, created_at)
-		VALUES ($1, $2, false, $3, $4)
-	`
-	expiredAt := time.Now().Add(10 * time.Minute)
-	createdAt := time.Now()
-	
-	_, err := database.DB.Exec(query, email, code, expiredAt, createdAt)
-	return err
-}
-
-// sendLoginCodeEmail 发送登录验证码邮件（模拟实现）
-func (s *Service) sendLoginCodeEmail(email, code string) error {
-	// 将验证码打印到控制台，方便测试
-	log.Printf("=== 登录验证码发送 ===")
-	log.Printf("邮箱: %s", email)
-	log.Printf("验证码: %s", code)
-	log.Printf("==================")
-
-	// TODO: 集成真实的邮件服务
-	return nil
-}
 
 // Login 第一步登录 - 验证email+password并发送登录验证码
 func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto.LoginCodeResponse, error) {
@@ -162,7 +88,7 @@ func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto
 	if err != nil {
 		if err == sql.ErrNoRows {
 			s.recordLoginSession(0, clientIP, userAgent, "email", "failed", "用户不存在")
-			return nil, common.ErrInvalidCredentials
+			return nil, common.ErrUserNotFound
 		}
 		return nil, err
 	}
@@ -180,55 +106,23 @@ func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto
 		return nil, common.ErrUserInactive
 	}
 
-	// 2. 生成登录验证码
-	code, err := s.generateLoginCode()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate login code: %w", err)
+	// 2. 发送登录验证码
+	sendReq := &verificationDto.SendVerificationRequest{
+		Target: req.Email,
+		Type:   "user_login",
 	}
-
-	// 3. 保存验证码到数据库
-	err = s.saveLoginCode(req.Email, code)
+	_, err = s.verificationService.SendVerificationCode(sendReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to save login code: %w", err)
-	}
-
-	// 4. 发送验证码邮件
-	err = s.sendLoginCodeEmail(req.Email, code)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send login code email: %w", err)
+		return nil, err
 	}
 
 	return &dto.LoginCodeResponse{
-		Message:   "登录验证码已发送",
-		LoginCode: code, // 仅在开发环境返回，生产环境应该移除
+		Message:   "用户登录验证码已发送",
+		LoginCode: "已发送到邮箱",
 		ExpiresIn: 600, // 10分钟
 	}, nil
 }
 
-// verifyLoginCode 验证登录验证码
-func (s *Service) verifyLoginCode(email, code string) (bool, error) {
-	query := `
-		SELECT id FROM login_codes 
-		WHERE email = $1 AND code = $2 AND is_used = false AND expired_at > NOW()
-	`
-	var id int64
-	err := database.DB.QueryRow(query, email, code).Scan(&id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return false, nil // 验证码无效或已过期
-		}
-		return false, err // 数据库错误
-	}
-
-	// 标记验证码为已使用
-	updateQuery := `UPDATE login_codes SET is_used = true WHERE id = $1`
-	_, err = database.DB.Exec(updateQuery, id)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
 
 // LoginVerify 第二步登录 - 验证登录验证码并返回token
 func (s *Service) LoginVerify(req *dto.LoginVerifyRequest, clientIP, userAgent string) (*dto.LoginResponse, error) {
@@ -236,19 +130,24 @@ func (s *Service) LoginVerify(req *dto.LoginVerifyRequest, clientIP, userAgent s
 	user, err := s.repo.GetByEmail(req.Email)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, common.ErrInvalidCredentials
+			return nil, common.ErrUserNotFound
 		}
 		return nil, err
 	}
 
-	// 2. 验证登录验证码
-	valid, err := s.verifyLoginCode(req.Email, req.Code)
-	if err != nil {
-		s.recordLoginSession(user.ID, clientIP, userAgent, "email", "failed", "验证码验证失败")
-		return nil, fmt.Errorf("failed to verify login code: %w", err)
+	// 2. 验证验证码
+	verifyReq := &verificationDto.VerifyCodeRequest{
+		Target: req.Email,
+		Code:   req.Code,
+		Type:   "user_login",
 	}
-	if !valid {
-		s.recordLoginSession(user.ID, clientIP, userAgent, "email", "failed", "验证码无效或已过期")
+	verifyResp, err := s.verificationService.VerifyCode(verifyReq)
+	if err != nil {
+		s.recordLoginSession(user.ID, clientIP, userAgent, "email", "failed", "验证码错误")
+		return nil, err
+	}
+	if !verifyResp.Valid {
+		s.recordLoginSession(user.ID, clientIP, userAgent, "email", "failed", "验证码无效")
 		return nil, common.ErrInvalidCode
 	}
 
@@ -285,7 +184,14 @@ func (s *Service) LoginVerify(req *dto.LoginVerifyRequest, clientIP, userAgent s
 		return nil, err
 	}
 
-	// 7. 记录登录会话并获取位置信息
+	// 7. 标记邮箱为已验证（通过登录验证码验证了邮箱所有权）
+	err = s.repo.UpdateEmailVerified(user.ID, true)
+	if err != nil {
+		log.Printf("Failed to update email_verified for user %d: %v", user.ID, err)
+		// 不返回错误，因为登录流程已经成功
+	}
+
+	// 8. 记录登录会话并获取位置信息
 	sessionInfo := s.recordLoginSessionWithIPInfo(user.ID, clientIP, userAgent, "email", "success", "登录成功")
 
 	return &dto.LoginResponse{
@@ -345,6 +251,95 @@ func (s *Service) RefreshToken(req *dto.RefreshTokenRequest) (*dto.LoginResponse
 
 func (s *Service) GetUserByID(userID int64) (*entities.User, error) {
 	return s.repo.GetByID(userID)
+}
+
+// ForgotPassword 忘记密码 - 发送重置密码验证码
+func (s *Service) ForgotPassword(req *dto.ForgotPasswordRequest) (*dto.ForgotPasswordResponse, error) {
+	// 1. 验证用户是否存在
+	user, err := s.repo.GetByEmail(req.Email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// 为了安全，即使用户不存在也返回成功，避免暴露用户是否存在
+			return &dto.ForgotPasswordResponse{
+				Message:   "如果该邮箱已注册，重置密码验证码已发送",
+				ExpiresIn: 600,
+			}, nil
+		}
+		return nil, err
+	}
+
+	// 2. 检查用户状态
+	if user.Status != "active" {
+		// 为了安全，不暴露账户状态信息
+		return &dto.ForgotPasswordResponse{
+			Message:   "如果该邮箱已注册，重置密码验证码已发送",
+			ExpiresIn: 600,
+		}, nil
+	}
+
+	// 3. 发送重置密码验证码
+	sendReq := &verificationDto.SendVerificationRequest{
+		Target: req.Email,
+		Type:   "forgot_password",
+	}
+	_, err = s.verificationService.SendVerificationCode(sendReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.ForgotPasswordResponse{
+		Message:   "重置密码验证码已发送到您的邮箱",
+		ExpiresIn: 600, // 10分钟
+	}, nil
+}
+
+// ResetPassword 重置密码 - 验证验证码并重置密码
+func (s *Service) ResetPassword(req *dto.ResetPasswordRequest) (*dto.ResetPasswordResponse, error) {
+	// 1. 验证用户是否存在
+	user, err := s.repo.GetByEmail(req.Email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, common.ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	// 2. 验证重置密码验证码
+	verifyReq := &verificationDto.VerifyCodeRequest{
+		Target: req.Email,
+		Code:   req.Code,
+		Type:   "forgot_password",
+	}
+	verifyResp, err := s.verificationService.VerifyCode(verifyReq)
+	if err != nil {
+		return nil, err
+	}
+	if !verifyResp.Valid {
+		return nil, common.ErrInvalidCode
+	}
+
+	// 3. 加密新密码
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. 更新密码
+	err = s.repo.UpdatePassword(user.ID, string(hashedPassword))
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. 可选：使所有refresh token失效，强制重新登录
+	err = s.repo.InvalidateAllRefreshTokens(user.ID)
+	if err != nil {
+		log.Printf("Failed to invalidate refresh tokens for user %d: %v", user.ID, err)
+		// 不返回错误，因为密码已经重置成功
+	}
+
+	return &dto.ResetPasswordResponse{
+		Message: "密码重置成功，请使用新密码登录",
+	}, nil
 }
 
 

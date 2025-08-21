@@ -17,6 +17,7 @@ type AdminRepository interface {
 	Create(admin *entities.Admin) error
 	Update(admin *entities.Admin) error
 	UpdateLastLogin(id int64) error
+	UpdatePassword(id int64, password string) error
 
 	// RefreshToken相关
 	CreateRefreshToken(token *entities.AdminRefreshToken) error
@@ -106,6 +107,11 @@ func (r *adminRepository) Update(admin *entities.Admin) error {
 
 func (r *adminRepository) UpdateLastLogin(id int64) error {
 	_, err := database.DB.Exec("UPDATE admins SET last_login_at = NOW() WHERE id = $1", id)
+	return err
+}
+
+func (r *adminRepository) UpdatePassword(id int64, password string) error {
+	_, err := database.DB.Exec("UPDATE admins SET password = $2, updated_at = NOW() WHERE id = $1", id, password)
 	return err
 }
 
@@ -274,7 +280,7 @@ func (r *adminRepository) GetUserList(req *dto.UserListRequest) (*dto.UserListRe
 	
 	whereClause := ""
 	if len(whereConditions) > 0 {
-		whereClause = " WHERE " + fmt.Sprintf("%s", whereConditions[0])
+		whereClause = " WHERE " + whereConditions[0]
 		for i := 1; i < len(whereConditions); i++ {
 			whereClause += " AND " + whereConditions[i]
 		}

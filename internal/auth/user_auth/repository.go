@@ -2,6 +2,7 @@ package user_auth
 
 import (
 	"database/sql"
+	"log"
 
 	"trusioo_api/internal/auth/user_auth/entities"
 	"trusioo_api/pkg/database"
@@ -16,6 +17,8 @@ type UserRepository interface {
 	Create(user *entities.User) error
 	Update(user *entities.User) error
 	UpdateLastLogin(id int64) error
+	UpdatePassword(id int64, password string) error
+	UpdateEmailVerified(id int64, verified bool) error
 
 	// RefreshToken相关
 	CreateRefreshToken(token *entities.RefreshToken) error
@@ -81,13 +84,17 @@ func (r *userRepository) GetByPhone(phone string) (*entities.User, error) {
 }
 
 func (r *userRepository) Create(user *entities.User) error {
+	// 调试信息
+	log.Printf("Creating user with status: %s", user.Status)
+	
 	query := `
 		INSERT INTO users (name, email, password, phone, image_key, role, status,
 			email_verified, phone_verified, auto_registered, profile_completed, password_set)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		RETURNING id, created_at, updated_at`
+		RETURNING id, created_at, updated_at, status`
 	
-	return database.DB.QueryRow(query,
+	var returnedStatus string
+	err := database.DB.QueryRow(query,
 		user.Name,
 		user.Email,
 		user.Password,
@@ -100,7 +107,17 @@ func (r *userRepository) Create(user *entities.User) error {
 		user.AutoRegistered,
 		user.ProfileCompleted,
 		user.PasswordSet,
-	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt, &returnedStatus)
+	
+	if err != nil {
+		return err
+	}
+	
+	// 调试信息
+	log.Printf("User created with ID: %d, status: %s", user.ID, returnedStatus)
+	user.Status = returnedStatus
+	
+	return nil
 }
 
 func (r *userRepository) Update(user *entities.User) error {
@@ -130,6 +147,16 @@ func (r *userRepository) Update(user *entities.User) error {
 
 func (r *userRepository) UpdateLastLogin(id int64) error {
 	_, err := database.DB.Exec("UPDATE users SET last_login_at = NOW() WHERE id = $1", id)
+	return err
+}
+
+func (r *userRepository) UpdatePassword(id int64, password string) error {
+	_, err := database.DB.Exec("UPDATE users SET password = $2, updated_at = NOW() WHERE id = $1", id, password)
+	return err
+}
+
+func (r *userRepository) UpdateEmailVerified(id int64, verified bool) error {
+	_, err := database.DB.Exec("UPDATE users SET email_verified = $2, updated_at = NOW() WHERE id = $1", id, verified)
 	return err
 }
 

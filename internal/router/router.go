@@ -6,7 +6,6 @@ import (
 	"trusioo_api/config"
 	admin_auth "trusioo_api/internal/auth/admin_auth"
 	user_auth "trusioo_api/internal/auth/user_auth"
-	"trusioo_api/internal/auth/verification"
 	"trusioo_api/internal/carddetection"
 	"trusioo_api/internal/health"
 	"trusioo_api/internal/middleware"
@@ -71,6 +70,18 @@ func SetupRouter() *gin.Engine {
 	// API 路由组
 	api := r.Group("/api/v1")
 
+	// API 版本的健康检查端点
+	healthGroup := api.Group("/health")
+	{
+		healthGroup.GET("", health.HealthCheck)           // /api/v1/health
+		healthGroup.GET("/ready", health.ReadinessCheck)  // /api/v1/health/ready
+		healthGroup.GET("/live", health.LivenessCheck)    // /api/v1/health/live
+		healthGroup.GET("/metrics", health.MetricsCheck)  // /api/v1/health/metrics
+		healthGroup.GET("/detailed", health.DetailedHealthCheck) // /api/v1/health/detailed
+		healthGroup.GET("/database", health.DatabaseHealthCheck) // /api/v1/health/database
+		healthGroup.GET("/redis", health.RedisHealthCheck)       // /api/v1/health/redis
+	}
+
 	// 认证相关路由（特殊速率限制）
 	authGroup := api.Group("/auth")
 	if config.AppConfig.RateLimit.Enabled {
@@ -85,13 +96,11 @@ func SetupRouter() *gin.Engine {
 	// 初始化处理器
 	authHandler := user_auth.NewHandler(authService)
 	adminHandler := admin_auth.NewHandler(adminService)
-	verificationHandler := verification.NewHandler()
 	cardDetectionHandler := carddetection.NewHandler()
 
 	// 注册路由
 	user_auth.RegisterRoutes(authGroup, authHandler)
 	admin_auth.RegisterRoutes(api, adminHandler)
-	verification.RegisterRoutes(api, verificationHandler)
 	carddetection.RegisterRoutes(api, cardDetectionHandler)
 
 	return r

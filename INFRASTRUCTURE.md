@@ -32,9 +32,13 @@
 
 ### 5. 健康检查端点 (`internal/health/handler.go`)
 - ✅ `/health` - 基础健康检查
-- ✅ `/health/ready` - 就绪检查
-- ✅ `/health/live` - 存活检查
-- ✅ `/metrics` - 系统指标（内存、协程数、数据库状态）
+- ✅ `api/v1/health` - 基础健康检查
+- ✅ `api/v1/health/ready` - 就绪检查
+- ✅ `api/v1/health/live` - 存活检查
+- ✅ `api/v1/health/metrics` - 系统指标（内存、协程数、数据库状态）
+- ✅ `api/v1/health/detailed` - 详细健康检查
+- ✅ `api/v1/health/database` - 数据库健康检查
+- ✅ `api/v1/health/redis` - Redis 健康检查
 
 ### 6. 请求追踪系统 (`internal/middleware/request_id.go`)
 - ✅ 自动生成请求 ID

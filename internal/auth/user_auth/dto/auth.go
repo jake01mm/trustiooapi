@@ -59,16 +59,26 @@ type RefreshTokenRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
-// PreAuthRequest 预验证请求（验证email+password后才能获取验证码）
-type PreAuthRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+// ForgotPasswordRequest 忘记密码请求
+type ForgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
 }
 
-// PreAuthResponse 预验证响应
-type PreAuthResponse struct {
+// ForgotPasswordResponse 忘记密码响应
+type ForgotPasswordResponse struct {
 	Message   string `json:"message"`
-	Verified  bool   `json:"verified"`
-	Email     string `json:"email,omitempty"`
-	ExpiredAt string `json:"expired_at,omitempty"`
+	ExpiresIn int    `json:"expires_in"` // 秒
 }
+
+// ResetPasswordRequest 重置密码请求
+type ResetPasswordRequest struct {
+	Email    string `json:"email" binding:"required,email"`
+	Code     string `json:"code" binding:"required,len=6"`
+	Password string `json:"password" binding:"required,min=6"`
+}
+
+// ResetPasswordResponse 重置密码响应
+type ResetPasswordResponse struct {
+	Message string `json:"message"`
+}
+

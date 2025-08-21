@@ -3,13 +3,13 @@ package dto
 // SendVerificationRequest 发送验证码请求
 type SendVerificationRequest struct {
 	Target string `json:"target" binding:"required,email" validate:"required,email"`
-	Type   string `json:"type" binding:"required" validate:"required,oneof=register reset_password forgot_password"`
+	Type   string `json:"type" binding:"required" validate:"required,oneof=admin_login user_login forgot_password admin_forgot_password buyer_login buyer_forgot_password"`
 }
 
 // VerifyCodeRequest 验证验证码请求
 type VerifyCodeRequest struct {
 	Target string `json:"target" binding:"required,email" validate:"required,email"`
-	Type   string `json:"type" binding:"required" validate:"required,oneof=register reset_password forgot_password"`
+	Type   string `json:"type" binding:"required" validate:"required,oneof=admin_login user_login forgot_password admin_forgot_password buyer_login buyer_forgot_password"`
 	Code   string `json:"code" binding:"required,len=6" validate:"required,len=6"`
 }
 
