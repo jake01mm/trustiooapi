@@ -217,9 +217,10 @@ func DetailedHealthCheck(c *gin.Context) {
 	}
 
 	statusCode := http.StatusOK
-	if overallStatus == "unhealthy" {
+	switch overallStatus {
+	case "unhealthy":
 		statusCode = http.StatusServiceUnavailable
-	} else if overallStatus == "degraded" {
+	case "degraded":
 		statusCode = http.StatusPartialContent
 	}
 
