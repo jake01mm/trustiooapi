@@ -1,0 +1,740 @@
+{
+  "info": {
+    "name": "Trusioo API - Card Detection Module",
+    "description": "Complete Postman collection for Card Detection module with test scripts and environment variables",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Check if user is authenticated",
+          "if (!pm.environment.get('user_access_token') && !pm.environment.get('admin_access_token')) {",
+          "    console.log('⚠️  WARNING: No access token found. Please login first (user or admin).');",
+          "}",
+          "",
+          "// Set default card detection parameters if not exists",
+          "if (!pm.environment.get('test_card_number')) {",
+          "    pm.environment.set('test_card_number', '1234567890123456');",
+          "}",
+          "if (!pm.environment.get('test_product_mark')) {",
+          "    pm.environment.set('test_product_mark', 'iTunes');",
+          "}",
+          "if (!pm.environment.get('test_region_id')) {",
+          "    pm.environment.set('test_region_id', '2');",
+          "}",
+          "if (!pm.environment.get('test_region_name')) {",
+          "    pm.environment.set('test_region_name', '美国');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{base_url}}/api/{{api_version}}"
+    },
+    {
+      "key": "authToken",
+      "value": "{{user_access_token}}"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Get CD Products",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get CD Products ===');",
+              "console.log('Access Token:', pm.environment.get('user_access_token') ? 'User token available ✓' : 'User token missing');",
+              "console.log('Admin Token:', pm.environment.get('admin_access_token') ? 'Admin token available ✓' : 'Admin token missing');",
+              "",
+              "// Use admin token if available, otherwise user token",
+              "const token = pm.environment.get('admin_access_token') || pm.environment.get('user_access_token');",
+              "pm.collectionVariables.set('authToken', token);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('CD Products response structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('products');",
+              "    pm.expect(responseJson.data).to.have.property('total');",
+              "});",
+              "",
+              "pm.test('Products data is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const products = responseJson.data.products;",
+              "    ",
+              "    pm.expect(products).to.be.an('array');",
+              "    pm.expect(responseJson.data.total).to.be.a('number').and.at.least(0);",
+              "    ",
+              "    if (products.length > 0) {",
+              "        const product = products[0];",
+              "        pm.expect(product).to.have.property('id');",
+              "        pm.expect(product).to.have.property('product_mark');",
+              "        pm.expect(product).to.have.property('product_name');",
+              "        pm.expect(product).to.have.property('requires_region');",
+              "        pm.expect(product).to.have.property('requires_pin');",
+              "        pm.expect(product).to.have.property('card_format');",
+              "        pm.expect(product).to.have.property('status');",
+              "        ",
+              "        // Store sample product for other tests",
+              "        pm.environment.set('sample_product_mark', product.product_mark);",
+              "        pm.environment.set('sample_product_requires_region', product.requires_region);",
+              "        pm.environment.set('sample_product_requires_pin', product.requires_pin);",
+              "    }",
+              "});",
+              "",
+              "console.log('=== CD Products Response ===');",
+              "const responseJson = pm.response.json();",
+              "console.log('Total Products:', responseJson.data.total);",
+              "console.log('Products Count:', responseJson.data.products.length);",
+              "if (responseJson.data.products.length > 0) {",
+              "    console.log('Sample Product:', responseJson.data.products[0].product_mark);",
+              "    console.log('Requires Region:', responseJson.data.products[0].requires_region);",
+              "    console.log('Requires PIN:', responseJson.data.products[0].requires_pin);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/card-detection/cd_products",
+          "host": ["{{baseUrl}}"],
+          "path": ["card-detection", "cd_products"]
+        },
+        "description": "Get list of available card detection products with their configuration. Requires user or admin authentication."
+      }
+    },
+    {
+      "name": "2. Get CD Regions",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get CD Regions ===');",
+              "console.log('Product Mark:', pm.environment.get('sample_product_mark') || pm.environment.get('test_product_mark'));",
+              "",
+              "// Use admin token if available, otherwise user token",
+              "const token = pm.environment.get('admin_access_token') || pm.environment.get('user_access_token');",
+              "pm.collectionVariables.set('authToken', token);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('CD Regions response structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('regions');",
+              "    pm.expect(responseJson.data).to.have.property('total');",
+              "});",
+              "",
+              "pm.test('Regions data is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const regions = responseJson.data.regions;",
+              "    ",
+              "    pm.expect(regions).to.be.an('array');",
+              "    pm.expect(responseJson.data.total).to.be.a('number').and.at.least(0);",
+              "    ",
+              "    if (regions.length > 0) {",
+              "        const region = regions[0];",
+              "        pm.expect(region).to.have.property('id');",
+              "        pm.expect(region).to.have.property('product_mark');",
+              "        pm.expect(region).to.have.property('region_id');",
+              "        pm.expect(region).to.have.property('region_name');",
+              "        pm.expect(region).to.have.property('status');",
+              "        ",
+              "        // Store sample region for other tests",
+              "        pm.environment.set('sample_region_id', region.region_id);",
+              "        pm.environment.set('sample_region_name', region.region_name);",
+              "    }",
+              "});",
+              "",
+              "console.log('=== CD Regions Response ===');",
+              "const responseJson = pm.response.json();",
+              "console.log('Product Mark:', responseJson.data.product_mark);",
+              "console.log('Total Regions:', responseJson.data.total);",
+              "console.log('Regions Count:', responseJson.data.regions.length);",
+              "if (responseJson.data.regions.length > 0) {",
+              "    console.log('Sample Region:', responseJson.data.regions[0].region_name);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/card-detection/cd_regions?product_mark={{sample_product_mark}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["card-detection", "cd_regions"],
+          "query": [
+            {
+              "key": "product_mark",
+              "value": "{{sample_product_mark}}",
+              "description": "Product mark to get regions for (e.g., iTunes, amazon, etc.)"
+            }
+          ]
+        },
+        "description": "Get list of available regions for a specific product. Requires user or admin authentication."
+      }
+    },
+    {
+      "name": "3. Check Card",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Check Card ===');",
+              "console.log('Card Number:', pm.environment.get('test_card_number'));",
+              "console.log('Product Mark:', pm.environment.get('sample_product_mark') || pm.environment.get('test_product_mark'));",
+              "console.log('Region ID:', pm.environment.get('sample_region_id') || pm.environment.get('test_region_id'));",
+              "",
+              "// Use admin token if available, otherwise user token",
+              "const token = pm.environment.get('admin_access_token') || pm.environment.get('user_access_token');",
+              "pm.collectionVariables.set('authToken', token);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Check card response structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('request_id');",
+              "    pm.expect(responseJson.data).to.have.property('message');",
+              "});",
+              "",
+              "pm.test('Request ID is generated', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson.data.request_id).to.be.a('string').and.not.empty;",
+              "    ",
+              "    // Store request ID for result checking",
+              "    pm.environment.set('check_request_id', responseJson.data.request_id);",
+              "});",
+              "",
+              "console.log('=== Check Card Response ===');",
+              "const responseJson = pm.response.json();",
+              "console.log('Request ID:', responseJson.data.request_id);",
+              "console.log('Message:', responseJson.data.message);",
+              "console.log('');",
+              "console.log('ℹ️  Card check initiated. Use Check Card Result to get the results.');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cards\": [\"{{test_card_number}}\"],\n  \"productMark\": \"{{sample_product_mark}}\",\n  \"regionId\": {{sample_region_id}},\n  \"regionName\": \"{{sample_region_name}}\",\n  \"autoType\": 0\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/card-detection/check",
+          "host": ["{{baseUrl}}"],
+          "path": ["card-detection", "check"]
+        },
+        "description": "Submit card(s) for detection. Returns a request ID that can be used to check results. Requires user or admin authentication."
+      }
+    },
+    {
+      "name": "4. Check Card Result",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Check Card Result ===');",
+              "console.log('Card Number:', pm.environment.get('test_card_number'));",
+              "console.log('Product Mark:', pm.environment.get('sample_product_mark') || pm.environment.get('test_product_mark'));",
+              "",
+              "// Use admin token if available, otherwise user token",
+              "const token = pm.environment.get('admin_access_token') || pm.environment.get('user_access_token');",
+              "pm.collectionVariables.set('authToken', token);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Check card result response structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('result');",
+              "});",
+              "",
+              "pm.test('Card result data is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const result = responseJson.data.result;",
+              "    ",
+              "    pm.expect(result).to.have.property('status');",
+              "    pm.expect(result).to.have.property('message');",
+              "    pm.expect(result).to.have.property('card_number');",
+              "    ",
+              "    // Store result for history checking",
+              "    pm.environment.set('latest_card_status', result.status);",
+              "});",
+              "",
+              "console.log('=== Check Card Result Response ===');",
+              "const responseJson = pm.response.json();",
+              "console.log('Card Status:', responseJson.data.result.status);",
+              "console.log('Message:', responseJson.data.result.message);",
+              "console.log('Card Number:', responseJson.data.result.card_number);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productMark\": \"{{sample_product_mark}}\",\n  \"cardNo\": \"{{test_card_number}}\",\n  \"pinCode\": \"{{test_pin_code}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/card-detection/result",
+          "host": ["{{baseUrl}}"],
+          "path": ["card-detection", "result"]
+        },
+        "description": "Get the result of a card detection check. Requires user or admin authentication."
+      }
+    },
+    {
+      "name": "5. Get User History",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get User History ===');",
+              "console.log('Page:', pm.environment.get('history_page') || '1');",
+              "console.log('Page Size:', pm.environment.get('history_page_size') || '10');",
+              "console.log('Status Filter:', pm.environment.get('history_status') || 'all');",
+              "",
+              "// Use admin token if available, otherwise user token",
+              "const token = pm.environment.get('admin_access_token') || pm.environment.get('user_access_token');",
+              "pm.collectionVariables.set('authToken', token);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('User history response structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('records');",
+              "    pm.expect(responseJson.data).to.have.property('pagination');",
+              "    pm.expect(responseJson.data).to.have.property('summary');",
+              "});",
+              "",
+              "pm.test('History data is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const records = responseJson.data.records;",
+              "    const pagination = responseJson.data.pagination;",
+              "    const summary = responseJson.data.summary;",
+              "    ",
+              "    pm.expect(records).to.be.an('array');",
+              "    pm.expect(pagination).to.have.property('page');",
+              "    pm.expect(pagination).to.have.property('page_size');",
+              "    pm.expect(pagination).to.have.property('total');",
+              "    pm.expect(pagination).to.have.property('total_pages');",
+              "    ",
+              "    pm.expect(summary).to.have.property('total_checks');",
+              "    pm.expect(summary).to.have.property('success_checks');",
+              "    pm.expect(summary).to.have.property('failed_checks');",
+              "    pm.expect(summary).to.have.property('success_rate');",
+              "    ",
+              "    if (records.length > 0) {",
+              "        const record = records[0];",
+              "        pm.expect(record).to.have.property('id');",
+              "        pm.expect(record).to.have.property('card_number');",
+              "        pm.expect(record).to.have.property('product_mark');",
+              "        pm.expect(record).to.have.property('check_status');",
+              "        pm.expect(record).to.have.property('created_at');",
+              "        ",
+              "        // Store sample record ID for detail request",
+              "        pm.environment.set('sample_record_id', record.id);",
+              "    }",
+              "});",
+              "",
+              "console.log('=== User History Response ===');",
+              "const responseJson = pm.response.json();",
+              "console.log('Total Records:', responseJson.data.pagination.total);",
+              "console.log('Current Page:', responseJson.data.pagination.page);",
+              "console.log('Records on Page:', responseJson.data.records.length);",
+              "console.log('Success Rate:', responseJson.data.summary.success_rate + '%');",
+              "if (responseJson.data.records.length > 0) {",
+              "    console.log('Sample Record ID saved:', responseJson.data.records[0].id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/card-detection/history?page={{history_page}}&page_size={{history_page_size}}&status={{history_status}}&product_mark={{history_product_mark}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["card-detection", "history"],
+          "query": [
+            {
+              "key": "page",
+              "value": "{{history_page}}",
+              "description": "Page number (default: 1)"
+            },
+            {
+              "key": "page_size",
+              "value": "{{history_page_size}}",
+              "description": "Page size (default: 10, max: 100)"
+            },
+            {
+              "key": "status",
+              "value": "{{history_status}}",
+              "description": "Filter by status: pending, completed, failed"
+            },
+            {
+              "key": "product_mark",
+              "value": "{{history_product_mark}}",
+              "description": "Filter by product mark"
+            }
+          ]
+        },
+        "description": "Get user's card detection history with pagination and filtering. Requires user or admin authentication."
+      }
+    },
+    {
+      "name": "6. Get Record Detail",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get Record Detail ===');",
+              "console.log('Record ID:', pm.environment.get('sample_record_id') || 'Not set');",
+              "",
+              "if (!pm.environment.get('sample_record_id')) {",
+              "    console.log('⚠️  WARNING: No sample_record_id found. Please run Get User History first or set manually.');",
+              "}",
+              "",
+              "// Use admin token if available, otherwise user token",
+              "const token = pm.environment.get('admin_access_token') || pm.environment.get('user_access_token');",
+              "pm.collectionVariables.set('authToken', token);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Record detail response structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('record');",
+              "});",
+              "",
+              "pm.test('Record detail data is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const record = responseJson.data.record;",
+              "    ",
+              "    pm.expect(record).to.have.property('id');",
+              "    pm.expect(record).to.have.property('request_id');",
+              "    pm.expect(record).to.have.property('card_number');",
+              "    pm.expect(record).to.have.property('product_mark');",
+              "    pm.expect(record).to.have.property('check_status');",
+              "    pm.expect(record).to.have.property('created_at');",
+              "    pm.expect(record).to.have.property('updated_at');",
+              "    ",
+              "    // Verify record ID matches requested ID",
+              "    pm.expect(record.id).to.eql(parseInt(pm.environment.get('sample_record_id')));",
+              "});",
+              "",
+              "console.log('=== Record Detail Response ===');",
+              "const responseJson = pm.response.json();",
+              "const record = responseJson.data.record;",
+              "console.log('Record ID:', record.id);",
+              "console.log('Request ID:', record.request_id);",
+              "console.log('Card Number:', record.card_number);",
+              "console.log('Product Mark:', record.product_mark);",
+              "console.log('Status:', record.check_status);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/card-detection/records/{{sample_record_id}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["card-detection", "records", "{{sample_record_id}}"]
+        },
+        "description": "Get detailed information for a specific card detection record. Requires user or admin authentication."
+      }
+    },
+    {
+      "name": "7. Get User Stats",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get User Stats ===');",
+              "",
+              "// Use admin token if available, otherwise user token",
+              "const token = pm.environment.get('admin_access_token') || pm.environment.get('user_access_token');",
+              "pm.collectionVariables.set('authToken', token);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('User stats response structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('summary');",
+              "    pm.expect(responseJson.data).to.have.property('product_stats');",
+              "    pm.expect(responseJson.data).to.have.property('monthly_stats');",
+              "    pm.expect(responseJson.data).to.have.property('recent_checks');",
+              "});",
+              "",
+              "pm.test('User stats data is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const summary = responseJson.data.summary;",
+              "    const productStats = responseJson.data.product_stats;",
+              "    const monthlyStats = responseJson.data.monthly_stats;",
+              "    const recentChecks = responseJson.data.recent_checks;",
+              "    ",
+              "    pm.expect(summary).to.have.property('total_checks');",
+              "    pm.expect(summary).to.have.property('success_checks');",
+              "    pm.expect(summary).to.have.property('failed_checks');",
+              "    pm.expect(summary).to.have.property('success_rate');",
+              "    ",
+              "    pm.expect(productStats).to.be.an('array');",
+              "    pm.expect(monthlyStats).to.be.an('array');",
+              "    pm.expect(recentChecks).to.be.an('array');",
+              "    ",
+              "    if (productStats.length > 0) {",
+              "        const prodStat = productStats[0];",
+              "        pm.expect(prodStat).to.have.property('product_mark');",
+              "        pm.expect(prodStat).to.have.property('total_checks');",
+              "        pm.expect(prodStat).to.have.property('success_rate');",
+              "    }",
+              "    ",
+              "    if (monthlyStats.length > 0) {",
+              "        const monthlyStat = monthlyStats[0];",
+              "        pm.expect(monthlyStat).to.have.property('month');",
+              "        pm.expect(monthlyStat).to.have.property('total_checks');",
+              "        pm.expect(monthlyStat).to.have.property('success_rate');",
+              "    }",
+              "});",
+              "",
+              "console.log('=== User Stats Response ===');",
+              "const responseJson = pm.response.json();",
+              "const summary = responseJson.data.summary;",
+              "console.log('Total Checks:', summary.total_checks);",
+              "console.log('Success Rate:', summary.success_rate + '%');",
+              "console.log('Product Stats Count:', responseJson.data.product_stats.length);",
+              "console.log('Monthly Stats Count:', responseJson.data.monthly_stats.length);",
+              "console.log('Recent Checks Count:', responseJson.data.recent_checks.length);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/card-detection/stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["card-detection", "stats"]
+        },
+        "description": "Get comprehensive statistics for the user's card detection activity. Requires user or admin authentication."
+      }
+    },
+    {
+      "name": "8. Get User Summary",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get User Summary ===');",
+              "",
+              "// Use admin token if available, otherwise user token",
+              "const token = pm.environment.get('admin_access_token') || pm.environment.get('user_access_token');",
+              "pm.collectionVariables.set('authToken', token);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('User summary response structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('summary');",
+              "});",
+              "",
+              "pm.test('User summary data is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const summary = responseJson.data.summary;",
+              "    ",
+              "    pm.expect(summary).to.have.property('total_checks');",
+              "    pm.expect(summary).to.have.property('success_checks');",
+              "    pm.expect(summary).to.have.property('failed_checks');",
+              "    pm.expect(summary).to.have.property('pending_checks');",
+              "    pm.expect(summary).to.have.property('success_rate');",
+              "    ",
+              "    // All counts should be numbers >= 0",
+              "    pm.expect(summary.total_checks).to.be.a('number').and.at.least(0);",
+              "    pm.expect(summary.success_checks).to.be.a('number').and.at.least(0);",
+              "    pm.expect(summary.failed_checks).to.be.a('number').and.at.least(0);",
+              "    pm.expect(summary.pending_checks).to.be.a('number').and.at.least(0);",
+              "    pm.expect(summary.success_rate).to.be.a('number').and.at.least(0).and.at.most(100);",
+              "});",
+              "",
+              "console.log('=== User Summary Response ===');",
+              "const responseJson = pm.response.json();",
+              "const summary = responseJson.data.summary;",
+              "console.log('Total Checks:', summary.total_checks);",
+              "console.log('Success Checks:', summary.success_checks);",
+              "console.log('Failed Checks:', summary.failed_checks);",
+              "console.log('Pending Checks:', summary.pending_checks);",
+              "console.log('Success Rate:', summary.success_rate + '%');",
+              "if (summary.last_check_at) {",
+              "    console.log('Last Check At:', summary.last_check_at);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/card-detection/summary",
+          "host": ["{{baseUrl}}"],
+          "path": ["card-detection", "summary"]
+        },
+        "description": "Get a quick summary of the user's card detection activity. Requires user or admin authentication."
+      }
+    }
+  ]
+}

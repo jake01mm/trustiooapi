@@ -1,0 +1,572 @@
+{
+  "info": {
+    "name": "Trusioo API - User Auth Module",
+    "description": "Complete Postman collection for User Authentication module with test scripts and environment variables",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Generate random suffix for unique emails if not exists",
+          "if (!pm.environment.get('random_suffix')) {",
+          "    pm.environment.set('random_suffix', Math.floor(Math.random() * 100000));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{base_url}}/api/{{api_version}}"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. User Registration",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Generate unique email for registration",
+              "const timestamp = Date.now();",
+              "const randomSuffix = Math.floor(Math.random() * 10000);",
+              "const uniqueEmail = `user_${timestamp}_${randomSuffix}@example.com`;",
+              "pm.environment.set('unique_user_email', uniqueEmail);",
+              "",
+              "console.log('=== User Registration ===');",
+              "console.log('Generated unique email:', uniqueEmail);",
+              "console.log('Password:', pm.environment.get('user_password'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has success structure', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson).to.have.property('data');",
+              "});",
+              "",
+              "pm.test('User data is correct', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const user = responseJson.data.user;",
+              "    ",
+              "    pm.expect(user).to.have.property('id');",
+              "    pm.expect(user.email).to.eql(pm.environment.get('unique_user_email'));",
+              "    pm.expect(user.status).to.eql('active');",
+              "    pm.expect(user.email_verified).to.eql(false);",
+              "    pm.expect(user.role).to.eql('user');",
+              "    pm.expect(user.password_set).to.eql(true);",
+              "    ",
+              "    // Store user data for subsequent requests",
+              "    pm.environment.set('registered_user_email', user.email);",
+              "    pm.environment.set('registered_user_id', user.id);",
+              "});",
+              "",
+              "console.log('=== Registration Response ===');",
+              "console.log('Response:', pm.response.json());"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{unique_user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "register"]
+        },
+        "description": "Register a new user with email and password. Status should be 'active' to allow login verification."
+      }
+    },
+    {
+      "name": "2. User Login (Step 1 - Send Code)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== User Login Step 1 ===');",
+              "console.log('Email:', pm.environment.get('registered_user_email'));",
+              "console.log('Password:', pm.environment.get('user_password'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Login code sent successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('message');",
+              "    pm.expect(responseJson.data).to.have.property('expires_in', 600);",
+              "});",
+              "",
+              "console.log('=== Login Step 1 Response ===');",
+              "console.log('Response:', pm.response.json());",
+              "console.log('');",
+              "console.log('⚠️  IMPORTANT: Check server console logs for verification code!');",
+              "console.log('Look for output like: \"验证码: 123456\"');",
+              "console.log('Then manually set the verification_code environment variable.');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{registered_user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "description": "First step of login: verify email+password and send verification code to email. Check server logs for the verification code."
+      }
+    },
+    {
+      "name": "3. User Login (Step 2 - Verify Code)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== User Login Step 2 ===');",
+              "console.log('Email:', pm.environment.get('registered_user_email'));",
+              "console.log('Verification Code:', pm.environment.get('verification_code'));",
+              "",
+              "if (!pm.environment.get('verification_code')) {",
+              "    console.log('⚠️  WARNING: verification_code is not set!');",
+              "    console.log('Please check server logs and manually set verification_code environment variable.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Login verification successful', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('access_token');",
+              "    pm.expect(responseJson.data).to.have.property('refresh_token');",
+              "    pm.expect(responseJson.data).to.have.property('token_type', 'Bearer');",
+              "    pm.expect(responseJson.data).to.have.property('user');",
+              "});",
+              "",
+              "pm.test('Tokens are valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson.data.access_token).to.be.a('string').and.not.empty;",
+              "    pm.expect(responseJson.data.refresh_token).to.be.a('string').and.not.empty;",
+              "    pm.expect(responseJson.data.expires_in).to.be.a('number').and.greaterThan(0);",
+              "});",
+              "",
+              "pm.test('User data is complete', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const user = responseJson.data.user;",
+              "    ",
+              "    pm.expect(user).to.have.property('id');",
+              "    pm.expect(user.email).to.eql(pm.environment.get('registered_user_email'));",
+              "    pm.expect(user.status).to.eql('active');",
+              "    pm.expect(user.role).to.eql('user');",
+              "});",
+              "",
+              "// Store tokens for authenticated requests",
+              "const responseJson = pm.response.json();",
+              "if (responseJson.code === 200) {",
+              "    pm.environment.set('user_access_token', responseJson.data.access_token);",
+              "    pm.environment.set('user_refresh_token', responseJson.data.refresh_token);",
+              "    pm.environment.set('user_id', responseJson.data.user.id);",
+              "}",
+              "",
+              "console.log('=== Login Step 2 Response ===');",
+              "console.log('Access Token:', responseJson.data.access_token ? 'Set ✓' : 'Not set ✗');",
+              "console.log('Refresh Token:', responseJson.data.refresh_token ? 'Set ✓' : 'Not set ✗');",
+              "console.log('User ID:', responseJson.data.user.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{registered_user_email}}\",\n  \"code\": \"{{verification_code}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login/verify",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login", "verify"]
+        },
+        "description": "Second step of login: verify the verification code and get access/refresh tokens. Make sure to set verification_code environment variable from server logs."
+      }
+    },
+    {
+      "name": "4. Get User Profile",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get User Profile ===');",
+              "console.log('Access Token:', pm.environment.get('user_access_token') ? 'Available ✓' : 'Missing ✗');",
+              "",
+              "if (!pm.environment.get('user_access_token')) {",
+              "    console.log('⚠️  WARNING: No access token found. Please run login flow first.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Profile data is correct', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('user');",
+              "});",
+              "",
+              "pm.test('User profile matches logged in user', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const user = responseJson.data.user;",
+              "    ",
+              "    pm.expect(user.id).to.eql(parseInt(pm.environment.get('user_id')));",
+              "    pm.expect(user.email).to.eql(pm.environment.get('registered_user_email'));",
+              "    pm.expect(user.role).to.eql('user');",
+              "});",
+              "",
+              "console.log('=== Profile Response ===');",
+              "console.log('User:', pm.response.json().data.user);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{user_access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/profile",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "profile"]
+        },
+        "description": "Get the current user's profile. Requires valid access token in Authorization header."
+      }
+    },
+    {
+      "name": "5. Refresh Token",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Refresh Token ===');",
+              "console.log('Refresh Token:', pm.environment.get('user_refresh_token') ? 'Available ✓' : 'Missing ✗');",
+              "",
+              "if (!pm.environment.get('user_refresh_token')) {",
+              "    console.log('⚠️  WARNING: No refresh token found. Please run login flow first.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('New access token received', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('access_token');",
+              "    pm.expect(responseJson.data).to.have.property('refresh_token');",
+              "    pm.expect(responseJson.data).to.have.property('token_type', 'Bearer');",
+              "});",
+              "",
+              "pm.test('User data is included', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson.data).to.have.property('user');",
+              "    pm.expect(responseJson.data.user.id).to.eql(parseInt(pm.environment.get('user_id')));",
+              "});",
+              "",
+              "// Update access token",
+              "const responseJson = pm.response.json();",
+              "if (responseJson.code === 200) {",
+              "    pm.environment.set('user_access_token', responseJson.data.access_token);",
+              "}",
+              "",
+              "console.log('=== Refresh Token Response ===');",
+              "console.log('New Access Token:', responseJson.data.access_token ? 'Generated ✓' : 'Failed ✗');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refresh_token\": \"{{user_refresh_token}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/refresh",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "refresh"]
+        },
+        "description": "Use refresh token to get a new access token without re-authentication."
+      }
+    },
+    {
+      "name": "6. Forgot Password (Send Reset Code)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Forgot Password ===');",
+              "console.log('Email:', pm.environment.get('registered_user_email'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Reset code sent successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('message');",
+              "    pm.expect(responseJson.data).to.have.property('expires_in', 600);",
+              "});",
+              "",
+              "console.log('=== Forgot Password Response ===');",
+              "console.log('Response:', pm.response.json());",
+              "console.log('');",
+              "console.log('⚠️  IMPORTANT: Check server console logs for reset verification code!');",
+              "console.log('Look for output like: \"验证码: 123456\"');",
+              "console.log('Then use that code in the Reset Password request.');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{registered_user_email}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/forgot-password",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "forgot-password"]
+        },
+        "description": "Send password reset verification code to user's email. Check server logs for the verification code."
+      }
+    },
+    {
+      "name": "7. Reset Password",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Reset Password ===');",
+              "console.log('Email:', pm.environment.get('registered_user_email'));",
+              "console.log('Reset Code:', pm.environment.get('verification_code'));",
+              "console.log('New Password:', pm.environment.get('new_password'));",
+              "",
+              "if (!pm.environment.get('verification_code')) {",
+              "    console.log('⚠️  WARNING: verification_code is not set!');",
+              "    console.log('Please check server logs from forgot-password request and set verification_code.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Password reset successful', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('message');",
+              "});",
+              "",
+              "// Update password for future tests",
+              "const responseJson = pm.response.json();",
+              "if (responseJson.code === 200) {",
+              "    pm.environment.set('user_password', pm.environment.get('new_password'));",
+              "    console.log('✓ Password updated in environment variables');",
+              "}",
+              "",
+              "console.log('=== Reset Password Response ===');",
+              "console.log('Response:', pm.response.json());",
+              "console.log('');",
+              "console.log('ℹ️  NOTE: All existing refresh tokens have been invalidated.');",
+              "console.log('You will need to login again with the new password.');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{registered_user_email}}\",\n  \"code\": \"{{verification_code}}\",\n  \"password\": \"{{new_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/reset-password",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "reset-password"]
+        },
+        "description": "Reset user password using verification code from forgot-password request. All existing refresh tokens will be invalidated."
+      }
+    },
+    {
+      "name": "8. Login with New Password (Step 1)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Login with New Password - Step 1 ===');",
+              "console.log('Email:', pm.environment.get('registered_user_email'));",
+              "console.log('New Password:', pm.environment.get('new_password'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Login with new password successful', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('message');",
+              "    pm.expect(responseJson.data).to.have.property('expires_in', 600);",
+              "});",
+              "",
+              "console.log('=== Login with New Password Response ===');",
+              "console.log('Response:', pm.response.json());",
+              "console.log('');",
+              "console.log('⚠️  IMPORTANT: Check server console logs for verification code!');",
+              "console.log('Update verification_code environment variable for Step 2.');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{registered_user_email}}\",\n  \"password\": \"{{new_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "description": "Test login with the new password after reset. This verifies the password reset worked correctly."
+      }
+    }
+  ]
+}

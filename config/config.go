@@ -10,6 +10,7 @@ import (
 
 type Config struct {
 	Database DatabaseConfig
+	Redis    RedisConfig
 	JWT      JWTConfig
 	Server   ServerConfig
 	CORS     CORSConfig
@@ -29,6 +30,19 @@ type DatabaseConfig struct {
 	MaxOpenConns   int
 	MaxIdleConns   int
 	ConnMaxLifetime int
+}
+
+type RedisConfig struct {
+	Host         string
+	Port         string
+	Password     string
+	DB           int
+	PoolSize     int
+	MinIdleConns int
+	MaxRetries   int
+	DialTimeout  int
+	ReadTimeout  int
+	WriteTimeout int
 }
 
 type JWTConfig struct {
@@ -102,6 +116,18 @@ func LoadConfig() error {
 			MaxOpenConns:   getEnvAsInt("DB_MAX_OPEN_CONNS", 25),
 			MaxIdleConns:   getEnvAsInt("DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: getEnvAsInt("DB_CONN_MAX_LIFETIME", 300),
+		},
+		Redis: RedisConfig{
+			Host:         getEnv("REDIS_HOST", "localhost"),
+			Port:         getEnv("REDIS_PORT", "6379"),
+			Password:     getEnv("REDIS_PASSWORD", ""),
+			DB:           getEnvAsInt("REDIS_DB", 0),
+			PoolSize:     getEnvAsInt("REDIS_POOL_SIZE", 10),
+			MinIdleConns: getEnvAsInt("REDIS_MIN_IDLE_CONNS", 5),
+			MaxRetries:   getEnvAsInt("REDIS_MAX_RETRIES", 3),
+			DialTimeout:  getEnvAsInt("REDIS_DIAL_TIMEOUT", 5),
+			ReadTimeout:  getEnvAsInt("REDIS_READ_TIMEOUT", 3),
+			WriteTimeout: getEnvAsInt("REDIS_WRITE_TIMEOUT", 3),
 		},
 		JWT: JWTConfig{
 			Secret:        getEnv("JWT_SECRET", "change-this-to-a-secure-secret-key"),

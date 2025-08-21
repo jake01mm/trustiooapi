@@ -4,10 +4,12 @@ import (
 	"context"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	"trusioo_api/pkg/database"
 	"trusioo_api/pkg/logger"
+	"trusioo_api/pkg/redis"
 
 	"github.com/gin-gonic/gin"
 )
@@ -313,15 +315,69 @@ func getDetailedDatabaseHealth() map[string]interface{} {
 
 // getRedisHealth 获取Redis健康信息（如果配置了Redis）
 func getRedisHealth() map[string]interface{} {
-	// 注意：这里假设Redis是可选的
-	// 如果没有配置Redis，返回nil
-	// 实际项目中，你可能需要根据配置来决定是否检查Redis
+	// 检查Redis是否已配置和连接
+	if !redis.IsConnected() {
+		return nil // Redis未配置或连接失败
+	}
 	
-	// TODO: 实现Redis健康检查
-	// 目前返回nil表示Redis未配置
-	return nil
+	health := map[string]interface{}{
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
 	
-	// 以下是Redis健康检查的示例实现（当你配置了Redis时取消注释）
+	// 测试Redis连接
+	client := redis.GetClient()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	
+	start := time.Now()
+	pong, err := client.Ping(ctx).Result()
+	duration := time.Since(start)
+	
+	if err != nil {
+		health["status"] = "unhealthy"
+		health["error"] = err.Error()
+		health["response_time_ms"] = duration.Milliseconds()
+		return health
+	}
+	
+	health["status"] = "healthy"
+	health["response"] = pong
+	health["response_time_ms"] = duration.Milliseconds()
+	
+	// 获取Redis统计信息
+	info, err := client.Info(ctx).Result()
+	if err == nil {
+		health["info"] = parseRedisInfo(info)
+	}
+	
+	return health
+}
+
+// parseRedisInfo 解析Redis INFO命令返回的信息
+func parseRedisInfo(info string) map[string]interface{} {
+	result := make(map[string]interface{})
+	lines := strings.Split(info, "\r\n")
+	
+	for _, line := range lines {
+		if strings.Contains(line, ":") && !strings.HasPrefix(line, "#") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				
+				// 只提取一些关键信息
+				switch key {
+				case "redis_version", "uptime_in_seconds", "connected_clients", 
+					 "used_memory_human", "total_connections_received", "total_commands_processed":
+					result[key] = value
+				}
+			}
+		}
+	}
+	
+	return result
+	
+	// 注释掉的旧代码
 	/*
 	health := map[string]interface{}{
 		"timestamp": time.Now().UTC().Format(time.RFC3339),

@@ -1,0 +1,692 @@
+{
+  "info": {
+    "name": "Trusioo API - Admin Auth Module",
+    "description": "Complete Postman collection for Admin Authentication module with test scripts and environment variables",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Generate random suffix for unique admin emails if not exists",
+          "if (!pm.environment.get('admin_random_suffix')) {",
+          "    pm.environment.set('admin_random_suffix', Math.floor(Math.random() * 100000));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{base_url}}/api/{{api_version}}"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Admin Login (Step 1 - Send Code)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Admin Login Step 1 ===');",
+              "console.log('Email:', pm.environment.get('admin_email'));",
+              "console.log('Password:', pm.environment.get('admin_password'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Admin login code sent successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('message');",
+              "    pm.expect(responseJson.data).to.have.property('expires_in', 600);",
+              "});",
+              "",
+              "console.log('=== Admin Login Step 1 Response ===');",
+              "console.log('Response:', pm.response.json());",
+              "console.log('');",
+              "console.log('⚠️  IMPORTANT: Check server console logs for admin verification code!');",
+              "console.log('Look for output like: \"验证码: 123456\"');",
+              "console.log('Then manually set the admin_verification_code environment variable.');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/admin/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "auth", "login"]
+        },
+        "description": "First step of admin login: verify email+password and send verification code. Check server logs for the verification code."
+      }
+    },
+    {
+      "name": "2. Admin Login (Step 2 - Verify Code)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Admin Login Step 2 ===');",
+              "console.log('Email:', pm.environment.get('admin_email'));",
+              "console.log('Verification Code:', pm.environment.get('admin_verification_code'));",
+              "",
+              "if (!pm.environment.get('admin_verification_code')) {",
+              "    console.log('⚠️  WARNING: admin_verification_code is not set!');",
+              "    console.log('Please check server logs and manually set admin_verification_code environment variable.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Admin login verification successful', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('access_token');",
+              "    pm.expect(responseJson.data).to.have.property('refresh_token');",
+              "    pm.expect(responseJson.data).to.have.property('token_type', 'Bearer');",
+              "    pm.expect(responseJson.data).to.have.property('admin');",
+              "});",
+              "",
+              "pm.test('Admin tokens are valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson.data.access_token).to.be.a('string').and.not.empty;",
+              "    pm.expect(responseJson.data.refresh_token).to.be.a('string').and.not.empty;",
+              "    pm.expect(responseJson.data.expires_in).to.be.a('number').and.greaterThan(0);",
+              "});",
+              "",
+              "pm.test('Admin data is complete', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const admin = responseJson.data.admin;",
+              "    ",
+              "    pm.expect(admin).to.have.property('id');",
+              "    pm.expect(admin.email).to.eql(pm.environment.get('admin_email'));",
+              "    pm.expect(admin.status).to.eql('active');",
+              "    pm.expect(admin.role).to.be.oneOf(['admin', 'super_admin']);",
+              "});",
+              "",
+              "// Store admin tokens for authenticated requests",
+              "const responseJson = pm.response.json();",
+              "if (responseJson.code === 200) {",
+              "    pm.environment.set('admin_access_token', responseJson.data.access_token);",
+              "    pm.environment.set('admin_refresh_token', responseJson.data.refresh_token);",
+              "    pm.environment.set('admin_id', responseJson.data.admin.id);",
+              "    pm.environment.set('admin_role', responseJson.data.admin.role);",
+              "}",
+              "",
+              "console.log('=== Admin Login Step 2 Response ===');",
+              "console.log('Access Token:', responseJson.data.access_token ? 'Set ✓' : 'Not set ✗');",
+              "console.log('Refresh Token:', responseJson.data.refresh_token ? 'Set ✓' : 'Not set ✗');",
+              "console.log('Admin ID:', responseJson.data.admin.id);",
+              "console.log('Admin Role:', responseJson.data.admin.role);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"code\": \"{{admin_verification_code}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/admin/auth/login/verify",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "auth", "login", "verify"]
+        },
+        "description": "Second step of admin login: verify the verification code and get access/refresh tokens. Make sure to set admin_verification_code environment variable from server logs."
+      }
+    },
+    {
+      "name": "3. Get Admin Profile",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get Admin Profile ===');",
+              "console.log('Access Token:', pm.environment.get('admin_access_token') ? 'Available ✓' : 'Missing ✗');",
+              "",
+              "if (!pm.environment.get('admin_access_token')) {",
+              "    console.log('⚠️  WARNING: No admin access token found. Please run admin login flow first.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Admin profile data is correct', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('admin');",
+              "});",
+              "",
+              "pm.test('Admin profile matches logged in admin', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const admin = responseJson.data.admin;",
+              "    ",
+              "    pm.expect(admin.id).to.eql(parseInt(pm.environment.get('admin_id')));",
+              "    pm.expect(admin.email).to.eql(pm.environment.get('admin_email'));",
+              "    pm.expect(admin.role).to.eql(pm.environment.get('admin_role'));",
+              "    pm.expect(admin.status).to.eql('active');",
+              "});",
+              "",
+              "console.log('=== Admin Profile Response ===');",
+              "console.log('Admin:', pm.response.json().data.admin);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/admin/profile",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "profile"]
+        },
+        "description": "Get the current admin's profile. Requires valid admin access token in Authorization header."
+      }
+    },
+    {
+      "name": "4. Admin Refresh Token",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Admin Refresh Token ===');",
+              "console.log('Refresh Token:', pm.environment.get('admin_refresh_token') ? 'Available ✓' : 'Missing ✗');",
+              "",
+              "if (!pm.environment.get('admin_refresh_token')) {",
+              "    console.log('⚠️  WARNING: No admin refresh token found. Please run admin login flow first.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('New admin access token received', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('access_token');",
+              "    pm.expect(responseJson.data).to.have.property('refresh_token');",
+              "    pm.expect(responseJson.data).to.have.property('token_type', 'Bearer');",
+              "});",
+              "",
+              "pm.test('Admin data is included', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson.data).to.have.property('admin');",
+              "    pm.expect(responseJson.data.admin.id).to.eql(parseInt(pm.environment.get('admin_id')));",
+              "});",
+              "",
+              "// Update admin access token",
+              "const responseJson = pm.response.json();",
+              "if (responseJson.code === 200) {",
+              "    pm.environment.set('admin_access_token', responseJson.data.access_token);",
+              "}",
+              "",
+              "console.log('=== Admin Refresh Token Response ===');",
+              "console.log('New Access Token:', responseJson.data.access_token ? 'Generated ✓' : 'Failed ✗');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refresh_token\": \"{{admin_refresh_token}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/admin/auth/refresh",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "auth", "refresh"]
+        },
+        "description": "Use admin refresh token to get a new access token without re-authentication."
+      }
+    },
+    {
+      "name": "5. Admin Forgot Password (Send Reset Code)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Admin Forgot Password ===');",
+              "console.log('Email:', pm.environment.get('admin_email'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Admin reset code sent successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('message');",
+              "    pm.expect(responseJson.data).to.have.property('expires_in', 600);",
+              "});",
+              "",
+              "console.log('=== Admin Forgot Password Response ===');",
+              "console.log('Response:', pm.response.json());",
+              "console.log('');",
+              "console.log('⚠️  IMPORTANT: Check server console logs for admin reset verification code!');",
+              "console.log('Look for output like: \"验证码: 123456\"');",
+              "console.log('Then use that code in the Admin Reset Password request.');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{admin_email}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/admin/auth/forgot-password",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "auth", "forgot-password"]
+        },
+        "description": "Send password reset verification code to admin's email. Check server logs for the verification code."
+      }
+    },
+    {
+      "name": "6. Admin Reset Password",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Admin Reset Password ===');",
+              "console.log('Email:', pm.environment.get('admin_email'));",
+              "console.log('Reset Code:', pm.environment.get('admin_verification_code'));",
+              "console.log('New Password:', pm.environment.get('admin_new_password'));",
+              "",
+              "if (!pm.environment.get('admin_verification_code')) {",
+              "    console.log('⚠️  WARNING: admin_verification_code is not set!');",
+              "    console.log('Please check server logs from admin forgot-password request and set admin_verification_code.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Admin password reset successful', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('message');",
+              "});",
+              "",
+              "// Update password for future tests",
+              "const responseJson = pm.response.json();",
+              "if (responseJson.code === 200) {",
+              "    pm.environment.set('admin_password', pm.environment.get('admin_new_password'));",
+              "    console.log('✓ Admin password updated in environment variables');",
+              "}",
+              "",
+              "console.log('=== Admin Reset Password Response ===');",
+              "console.log('Response:', pm.response.json());",
+              "console.log('');",
+              "console.log('ℹ️  NOTE: All existing admin refresh tokens have been invalidated.');",
+              "console.log('You will need to login again with the new password.');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"code\": \"{{admin_verification_code}}\",\n  \"password\": \"{{admin_new_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/admin/auth/reset-password",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "auth", "reset-password"]
+        },
+        "description": "Reset admin password using verification code from admin forgot-password request. All existing admin refresh tokens will be invalidated."
+      }
+    },
+    {
+      "name": "7. Get User Statistics",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get User Statistics ===');",
+              "console.log('Admin Access Token:', pm.environment.get('admin_access_token') ? 'Available ✓' : 'Missing ✗');",
+              "",
+              "if (!pm.environment.get('admin_access_token')) {",
+              "    console.log('⚠️  WARNING: No admin access token found. Please run admin login flow first.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('User statistics data is correct', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('stats');",
+              "});",
+              "",
+              "pm.test('User statistics structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const stats = responseJson.data.stats;",
+              "    ",
+              "    pm.expect(stats).to.have.property('total_users');",
+              "    pm.expect(stats).to.have.property('active_users');",
+              "    pm.expect(stats).to.have.property('inactive_users');",
+              "    pm.expect(stats).to.have.property('registered_today');",
+              "    pm.expect(stats).to.have.property('registered_this_week');",
+              "    pm.expect(stats).to.have.property('registered_this_month');",
+              "    ",
+              "    // All stats should be numbers >= 0",
+              "    Object.values(stats).forEach(value => {",
+              "        pm.expect(value).to.be.a('number').and.at.least(0);",
+              "    });",
+              "});",
+              "",
+              "console.log('=== User Statistics Response ===');",
+              "console.log('Stats:', pm.response.json().data.stats);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/admin/users/stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "users", "stats"]
+        },
+        "description": "Get user statistics including total users, active/inactive counts, and registration metrics. Requires admin authentication."
+      }
+    },
+    {
+      "name": "8. Get User List",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get User List ===');",
+              "console.log('Admin Access Token:', pm.environment.get('admin_access_token') ? 'Available ✓' : 'Missing ✗');",
+              "console.log('Page:', pm.environment.get('user_list_page') || '1');",
+              "console.log('Page Size:', pm.environment.get('user_list_page_size') || '10');",
+              "",
+              "if (!pm.environment.get('admin_access_token')) {",
+              "    console.log('⚠️  WARNING: No admin access token found. Please run admin login flow first.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('User list data is correct', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('users');",
+              "    pm.expect(responseJson.data).to.have.property('total');",
+              "    pm.expect(responseJson.data).to.have.property('page');",
+              "    pm.expect(responseJson.data).to.have.property('size');",
+              "});",
+              "",
+              "pm.test('User list structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const data = responseJson.data;",
+              "    ",
+              "    pm.expect(data.users).to.be.an('array');",
+              "    pm.expect(data.total).to.be.a('number').and.at.least(0);",
+              "    pm.expect(data.page).to.be.a('number').and.at.least(1);",
+              "    pm.expect(data.size).to.be.a('number').and.at.least(1);",
+              "    ",
+              "    // Check user object structure if users exist",
+              "    if (data.users.length > 0) {",
+              "        const user = data.users[0];",
+              "        pm.expect(user).to.have.property('id');",
+              "        pm.expect(user).to.have.property('email');",
+              "        pm.expect(user).to.have.property('role');",
+              "        pm.expect(user).to.have.property('status');",
+              "        pm.expect(user).to.have.property('created_at');",
+              "        ",
+              "        // Store first user ID for detail request",
+              "        pm.environment.set('sample_user_id', user.id);",
+              "    }",
+              "});",
+              "",
+              "console.log('=== User List Response ===');",
+              "const responseJson = pm.response.json();",
+              "console.log('Total Users:', responseJson.data.total);",
+              "console.log('Page:', responseJson.data.page, 'Size:', responseJson.data.size);",
+              "console.log('Users Count:', responseJson.data.users.length);",
+              "if (responseJson.data.users.length > 0) {",
+              "    console.log('Sample User ID saved:', responseJson.data.users[0].id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/admin/users?page={{user_list_page}}&page_size={{user_list_page_size}}&status={{user_list_status}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "users"],
+          "query": [
+            {
+              "key": "page",
+              "value": "{{user_list_page}}",
+              "description": "Page number (default: 1)"
+            },
+            {
+              "key": "page_size",
+              "value": "{{user_list_page_size}}",
+              "description": "Page size (default: 10, max: 100)"
+            },
+            {
+              "key": "status",
+              "value": "{{user_list_status}}",
+              "description": "Filter by status: active, inactive, all"
+            }
+          ]
+        },
+        "description": "Get paginated list of users with optional filtering. Requires admin authentication."
+      }
+    },
+    {
+      "name": "9. Get User Detail",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('=== Get User Detail ===');",
+              "console.log('Admin Access Token:', pm.environment.get('admin_access_token') ? 'Available ✓' : 'Missing ✗');",
+              "console.log('User ID:', pm.environment.get('sample_user_id') || 'Not set');",
+              "",
+              "if (!pm.environment.get('admin_access_token')) {",
+              "    console.log('⚠️  WARNING: No admin access token found. Please run admin login flow first.');",
+              "}",
+              "",
+              "if (!pm.environment.get('sample_user_id')) {",
+              "    console.log('⚠️  WARNING: No sample_user_id found. Please run Get User List first or set manually.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('User detail data is correct', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('code', 200);",
+              "    pm.expect(responseJson).to.have.property('message', 'success');",
+              "    pm.expect(responseJson.data).to.have.property('user');",
+              "});",
+              "",
+              "pm.test('User detail structure is valid', function () {",
+              "    const responseJson = pm.response.json();",
+              "    const user = responseJson.data.user;",
+              "    ",
+              "    pm.expect(user).to.have.property('id');",
+              "    pm.expect(user).to.have.property('name');",
+              "    pm.expect(user).to.have.property('email');",
+              "    pm.expect(user).to.have.property('role');",
+              "    pm.expect(user).to.have.property('status');",
+              "    pm.expect(user).to.have.property('email_verified');",
+              "    pm.expect(user).to.have.property('phone_verified');",
+              "    pm.expect(user).to.have.property('profile_completed');",
+              "    pm.expect(user).to.have.property('created_at');",
+              "    pm.expect(user).to.have.property('updated_at');",
+              "    ",
+              "    // Verify user ID matches requested ID",
+              "    pm.expect(user.id).to.eql(parseInt(pm.environment.get('sample_user_id')));",
+              "});",
+              "",
+              "console.log('=== User Detail Response ===');",
+              "console.log('User:', pm.response.json().data.user);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/admin/users/{{sample_user_id}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "users", "{{sample_user_id}}"]
+        },
+        "description": "Get detailed information for a specific user by ID. Requires admin authentication. Use sample_user_id from user list or set manually."
+      }
+    }
+  ]
+}

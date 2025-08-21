@@ -1,15 +1,115 @@
 package logger
 
 import (
-	"io"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
 var Log *logrus.Logger
+
+// FileHook 文件钩子，用于同时写入文件
+type FileHook struct {
+	fileLogger *logrus.Logger
+}
+
+// Levels 返回支持的日志级别
+func (hook *FileHook) Levels() []logrus.Level {
+	return logrus.AllLevels
+}
+
+// Fire 执行钩子
+func (hook *FileHook) Fire(entry *logrus.Entry) error {
+	// 将日志条目写入文件
+	hook.fileLogger.WithFields(entry.Data).Log(entry.Level, entry.Message)
+	return nil
+}
+
+// PrettyFormatter 自定义美观的日志格式化器
+type PrettyFormatter struct {
+	TimestampFormat string
+	Colorize        bool
+}
+
+// Format 实现 logrus.Formatter 接口
+func (f *PrettyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	timestamp := entry.Time.Format(f.TimestampFormat)
+	message := entry.Message
+
+	// 获取调用者信息
+	caller := ""
+	if entry.HasCaller() {
+		fileParts := strings.Split(entry.Caller.File, "/")
+		if len(fileParts) > 0 {
+			caller = fmt.Sprintf("%s:%d", fileParts[len(fileParts)-1], entry.Caller.Line)
+		}
+	}
+
+	// 颜色和图标配置
+	var levelIcon, levelColor, resetColor string
+	if f.Colorize {
+		resetColor = "\033[0m"
+		switch entry.Level {
+		case logrus.DebugLevel:
+			levelIcon = "🔍"
+			levelColor = "\033[36m" // 青色
+		case logrus.InfoLevel:
+			levelIcon = "ℹ️"
+			levelColor = "\033[32m" // 绿色
+		case logrus.WarnLevel:
+			levelIcon = "⚠️"
+			levelColor = "\033[33m" // 黄色
+		case logrus.ErrorLevel:
+			levelIcon = "❌"
+			levelColor = "\033[31m" // 红色
+		case logrus.FatalLevel, logrus.PanicLevel:
+			levelIcon = "💀"
+			levelColor = "\033[35m" // 紫色
+		}
+	} else {
+		switch entry.Level {
+		case logrus.DebugLevel:
+			levelIcon = "[DEBUG]"
+		case logrus.InfoLevel:
+			levelIcon = "[INFO]"
+		case logrus.WarnLevel:
+			levelIcon = "[WARN]"
+		case logrus.ErrorLevel:
+			levelIcon = "[ERROR]"
+		case logrus.FatalLevel, logrus.PanicLevel:
+			levelIcon = "[FATAL]"
+		}
+	}
+
+	// 构建日志行
+	var logLine string
+	if f.Colorize {
+		logLine = fmt.Sprintf("%s%s %s%s %s%s %s%s\n",
+			"\033[90m", timestamp, // 灰色时间戳
+			levelColor, levelIcon,
+			"\033[94m", message, // 蓝色消息
+			resetColor, caller)
+	} else {
+		logLine = fmt.Sprintf("%s %s %s [%s]\n", timestamp, levelIcon, message, caller)
+	}
+
+	// 添加字段信息
+	if len(entry.Data) > 0 {
+		for key, value := range entry.Data {
+			if f.Colorize {
+				logLine += fmt.Sprintf("  \033[96m%s\033[0m: %v\n", key, value) // 青色字段名
+			} else {
+				logLine += fmt.Sprintf("  %s: %v\n", key, value)
+			}
+		}
+	}
+
+	return []byte(logLine), nil
+}
 
 // InitLogger 初始化结构化日志
 func InitLogger() {
@@ -28,12 +128,15 @@ func InitLogger() {
 		return
 	}
 
-	// 同时输出到控制台和文件
-	multiWriter := io.MultiWriter(os.Stdout, logFile)
-	Log.SetOutput(multiWriter)
+	// 为控制台和文件设置不同的格式化器
+	// 控制台使用美观格式（带颜色）
+	consoleFormatter := &PrettyFormatter{
+		TimestampFormat: "15:04:05",
+		Colorize:        true,
+	}
 
-	// 设置日志格式为JSON
-	Log.SetFormatter(&logrus.JSONFormatter{
+	// 文件使用JSON格式（便于日志分析）
+	fileFormatter := &logrus.JSONFormatter{
 		TimestampFormat: "2006-01-02 15:04:05",
 		FieldMap: logrus.FieldMap{
 			logrus.FieldKeyTime:  "timestamp",
@@ -41,15 +144,31 @@ func InitLogger() {
 			logrus.FieldKeyMsg:   "message",
 			logrus.FieldKeyFunc:  "caller",
 		},
-	})
+	}
 
-	// 设置日志级别
+	// 创建自定义的多重写入器
+	consoleLogger := logrus.New()
+	consoleLogger.SetOutput(os.Stdout)
+	consoleLogger.SetFormatter(consoleFormatter)
+	consoleLogger.SetLevel(logrus.InfoLevel)
+	consoleLogger.SetReportCaller(true)
+
+	fileLogger := logrus.New()
+	fileLogger.SetOutput(logFile)
+	fileLogger.SetFormatter(fileFormatter)
+	fileLogger.SetLevel(logrus.InfoLevel)
+	fileLogger.SetReportCaller(true)
+
+	// 设置主日志器使用控制台格式
+	Log.SetOutput(os.Stdout)
+	Log.SetFormatter(consoleFormatter)
 	Log.SetLevel(logrus.InfoLevel)
-
-	// 设置报告调用者
 	Log.SetReportCaller(true)
 
-	Log.Info("Logger initialized successfully")
+	// 添加文件钩子
+	Log.AddHook(&FileHook{fileLogger: fileLogger})
+
+	Log.Info("🚀 Trusioo API Logger initialized successfully")
 }
 
 // GetLogger 获取日志实例

@@ -1,0 +1,305 @@
+{
+  "info": {
+    "name": "Trusioo Admin Auth API",
+    "description": "管理员认证和用户管理 API 集合",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "认证管理",
+      "item": [
+        {
+          "name": "1. 管理员登录 - 发送验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@trusioo.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2. 管理员登录 - 验证登录码",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.access_token) {",
+                  "        pm.collectionVariables.set('accessToken', response.data.access_token);",
+                  "        pm.collectionVariables.set('refreshToken', response.data.refresh_token);",
+                  "        console.log('Tokens saved successfully');",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@trusioo.com\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/auth/login/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "auth", "login", "verify"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3. 刷新访问令牌",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.access_token) {",
+                  "        pm.collectionVariables.set('accessToken', response.data.access_token);",
+                  "        pm.collectionVariables.set('refreshToken', response.data.refresh_token);",
+                  "        console.log('Tokens refreshed successfully');",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "auth", "refresh"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4. 忘记密码 - 发送重置码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@trusioo.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "auth", "forgot-password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5. 重置密码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@trusioo.com\",\n  \"code\": \"123456\",\n  \"password\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/auth/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "auth", "reset-password"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "管理员功能",
+      "item": [
+        {
+          "name": "获取管理员资料",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取用户统计",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", "stats"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取用户列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users?page=1&page_size=20&status=all",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "20"
+                },
+                {
+                  "key": "status",
+                  "value": "all"
+                },
+                {
+                  "key": "email",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "phone",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取用户详情",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", "1"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "健康检查",
+      "item": [
+        {
+          "name": "基础健康检查",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "详细健康检查",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health/detailed",
+              "host": ["{{baseUrl}}"],
+              "path": ["health", "detailed"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

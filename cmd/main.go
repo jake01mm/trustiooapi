@@ -12,6 +12,7 @@ import (
 	"trusioo_api/internal/router"
 	"trusioo_api/pkg/database"
 	"trusioo_api/pkg/logger"
+	"trusioo_api/pkg/redis"
 )
 
 func main() {
@@ -30,6 +31,12 @@ func main() {
 		logger.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer database.CloseDatabase()
+
+	// 初始化Redis
+	if err := redis.InitRedis(); err != nil {
+		logger.Fatalf("Failed to initialize Redis: %v", err)
+	}
+	defer redis.CloseRedis()
 
 	// 设置路由
 	r := router.SetupRouter()
@@ -89,6 +96,11 @@ func gracefulShutdown(srv *http.Server) {
 	
 	// 关闭数据库连接
 	database.CloseDatabase()
+	
+	// 关闭Redis连接
+	if err := redis.CloseRedis(); err != nil {
+		logger.Errorf("Failed to close Redis connection: %v", err)
+	}
 	
 	// 清理日志
 	if err := logger.RotateLogFile(); err != nil {

@@ -48,3 +48,13 @@ main
 
 # Backup files
 *.bak
+
+# Redis dumps
+dump.rdb
+
+# Temporary test files
+test_*.go
+
+# TODO files (keep these for development tracking)
+# TODO_REDIS_INTEGRATION.md
+# REDIS_SETUP_COMPLETE.md
