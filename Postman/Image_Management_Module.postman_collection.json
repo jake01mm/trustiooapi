@@ -1,0 +1,307 @@
+{
+	"info": {
+		"_postman_id": "image-management-module",
+		"name": "Image Management Module",
+		"description": "Trusioo API图片管理模块测试集合",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Upload Image (Public)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": []
+						},
+						{
+							"key": "is_public",
+							"value": "true",
+							"type": "text"
+						},
+						{
+							"key": "folder",
+							"value": "uploads",
+							"type": "text"
+						},
+						{
+							"key": "file_name",
+							"value": "",
+							"type": "text",
+							"disabled": true
+						}
+					]
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/images/upload",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"images",
+						"upload"
+					]
+				},
+				"description": "上传公开图片到R2存储桶"
+			},
+			"response": []
+		},
+		{
+			"name": "Upload Image (Private)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": []
+						},
+						{
+							"key": "is_public",
+							"value": "false",
+							"type": "text"
+						},
+						{
+							"key": "folder",
+							"value": "private",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/images/upload",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"images",
+						"upload"
+					]
+				},
+				"description": "上传私有图片到R2存储桶"
+			},
+			"response": []
+		},
+		{
+			"name": "List Images",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/v1/images/?page=1&page_size=20&folder=uploads&is_public=true",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"images",
+						""
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1"
+						},
+						{
+							"key": "page_size",
+							"value": "20"
+						},
+						{
+							"key": "folder",
+							"value": "uploads"
+						},
+						{
+							"key": "is_public",
+							"value": "true"
+						}
+					]
+				},
+				"description": "获取图片列表"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Image by ID",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/v1/images/{{image_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"images",
+						"{{image_id}}"
+					]
+				},
+				"description": "通过ID获取图片详情"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Image by Key",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/images/public/{{image_key}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"images",
+						"public",
+						"{{image_key}}"
+					]
+				},
+				"description": "通过key获取公开图片信息"
+			},
+			"response": []
+		},
+		{
+			"name": "Refresh Image URL",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/v1/images/{{image_id}}/refresh",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"images",
+						"{{image_id}}",
+						"refresh"
+					]
+				},
+				"description": "刷新私有图片的访问URL"
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Image",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/v1/images/{{image_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"images",
+						"{{image_id}}"
+					]
+				},
+				"description": "删除图片（同时从R2和数据库删除）"
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// 自动保存响应中的变量",
+					"if (pm.response.code === 200 || pm.response.code === 201) {",
+					"    const response = pm.response.json();",
+					"    ",
+					"    // 保存图片ID",
+					"    if (response.data && response.data.id) {",
+					"        pm.environment.set('image_id', response.data.id);",
+					"    }",
+					"    ",
+					"    // 保存图片key",
+					"    if (response.data && response.data.key) {",
+					"        pm.environment.set('image_key', response.data.key);",
+					"    }",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "image_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "image_key",
+			"value": "uploads/example.jpg",
+			"type": "string"
+		}
+	]
+}

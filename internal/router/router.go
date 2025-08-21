@@ -8,7 +8,10 @@ import (
 	user_auth "trusioo_api/internal/auth/user_auth"
 	"trusioo_api/internal/carddetection"
 	"trusioo_api/internal/health"
+	"trusioo_api/internal/images"
 	"trusioo_api/internal/middleware"
+	"trusioo_api/pkg/database"
+	"trusioo_api/pkg/r2storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -93,6 +96,25 @@ func SetupRouter() *gin.Engine {
 	authService := user_auth.NewService(userRepo)
 	adminService := admin_auth.NewService()
 
+	// 初始化R2存储客户端
+	r2Client := r2storage.NewClient(
+		config.AppConfig.R2Storage.AccessKeyID,
+		config.AppConfig.R2Storage.SecretAccessKey,
+		config.AppConfig.R2Storage.Endpoint,
+		config.AppConfig.R2Storage.Region,
+		config.AppConfig.R2Storage.PublicBucket,
+		config.AppConfig.R2Storage.PrivateBucket,
+		config.AppConfig.R2Storage.PublicCDNURL,
+		config.AppConfig.R2Storage.PrivateCDNURL,
+		config.AppConfig.R2Storage.MaxFileSize,
+		config.AppConfig.R2Storage.AllowedMimeTypes,
+	)
+
+	// 初始化图片服务
+	imageRepo := images.NewRepository(database.DB)
+	imageService := images.NewService(imageRepo, r2Client)
+	imageHandler := images.NewHandler(imageService)
+
 	// 初始化处理器
 	authHandler := user_auth.NewHandler(authService)
 	adminHandler := admin_auth.NewHandler(adminService)
@@ -102,6 +124,7 @@ func SetupRouter() *gin.Engine {
 	user_auth.RegisterRoutes(authGroup, authHandler)
 	admin_auth.RegisterRoutes(api, adminHandler)
 	carddetection.RegisterRoutes(api, cardDetectionHandler)
+	images.RegisterRoutes(api, imageHandler)
 
 	return r
 }

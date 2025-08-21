@@ -19,6 +19,8 @@ type Config struct {
 	RateLimit RateLimitConfig
 	Request  RequestConfig
 	ThirdParty ThirdPartyConfig
+	R2Storage R2StorageConfig
+	Performance PerformanceConfig
 }
 
 type DatabaseConfig struct {
@@ -97,6 +99,50 @@ type ThirdPartyConfig struct {
 	CardDetectionTimeout    int
 }
 
+type R2StorageConfig struct {
+	AccessKeyID      string
+	SecretAccessKey  string
+	Endpoint         string
+	Region           string
+	PublicBucket     string
+	PrivateBucket    string
+	PublicCDNURL     string
+	PrivateCDNURL    string
+	MaxFileSize      int64
+	AllowedMimeTypes []string
+	// 高并发优化配置
+	MaxConcurrentUploads int
+	UploadTimeout        int
+	MaxRetries           int
+	RetryDelay           int
+}
+
+type PerformanceConfig struct {
+	// 缓存配置
+	EnableCache          bool
+	CacheExpiration      int
+	CacheCleanupInterval int
+	
+	// 并发控制
+	MaxConcurrentRequests int
+	UploadWorkerPool      int
+	ProcessingWorkerPool  int
+	
+	// 队列配置
+	EnableQueue          bool
+	QueueSize            int
+	BatchSize            int
+	ProcessingTimeout    int
+	
+	// CDN和预热
+	EnableCDNPrefetch    bool
+	PrefetchWorkers      int
+	
+	// 性能监控
+	EnableMetrics        bool
+	MetricsInterval      int
+}
+
 var AppConfig *Config
 
 func LoadConfig() error {
@@ -172,6 +218,48 @@ func LoadConfig() error {
 			CardDetectionAppID:     getEnv("CARD_DETECTION_APP_ID", ""),
 			CardDetectionAppSecret: getEnv("CARD_DETECTION_APP_SECRET", ""),
 			CardDetectionTimeout:   getEnvAsInt("CARD_DETECTION_TIMEOUT", 30),
+		},
+		R2Storage: R2StorageConfig{
+			AccessKeyID:      getEnv("R2_ACCESS_KEY_ID", ""),
+			SecretAccessKey:  getEnv("R2_SECRET_ACCESS_KEY", ""),
+			Endpoint:         getEnv("R2_ENDPOINT", "https://27f7f20b92ac245bf54ced4369c47776.r2.cloudflarestorage.com"),
+			Region:           getEnv("R2_REGION", "auto"),
+			PublicBucket:     getEnv("R2_PUBLIC_BUCKET", "trusioo-public"),
+			PrivateBucket:    getEnv("R2_PRIVATE_BUCKET", "trusioo-private3235"),
+			PublicCDNURL:     getEnv("R2_PUBLIC_CDN_URL", "https://trusioo-public.trusioo.com"),
+			PrivateCDNURL:    getEnv("R2_PRIVATE_CDN_URL", "https://trusioo-private.trusioo.com"),
+			MaxFileSize:      getEnvAsInt64("R2_MAX_FILE_SIZE", 10485760), // 10MB
+			AllowedMimeTypes: strings.Split(getEnv("R2_ALLOWED_MIME_TYPES", "image/jpeg,image/png,image/gif,image/webp"), ","),
+			// 高并发配置
+			MaxConcurrentUploads: getEnvAsInt("R2_MAX_CONCURRENT_UPLOADS", 100),
+			UploadTimeout:        getEnvAsInt("R2_UPLOAD_TIMEOUT", 60),
+			MaxRetries:           getEnvAsInt("R2_MAX_RETRIES", 3),
+			RetryDelay:           getEnvAsInt("R2_RETRY_DELAY", 1),
+		},
+		Performance: PerformanceConfig{
+			// 缓存配置
+			EnableCache:          getEnvAsBool("PERF_ENABLE_CACHE", true),
+			CacheExpiration:      getEnvAsInt("PERF_CACHE_EXPIRATION", 3600), // 1小时
+			CacheCleanupInterval: getEnvAsInt("PERF_CACHE_CLEANUP_INTERVAL", 300), // 5分钟
+			
+			// 并发控制
+			MaxConcurrentRequests: getEnvAsInt("PERF_MAX_CONCURRENT_REQUESTS", 1000),
+			UploadWorkerPool:      getEnvAsInt("PERF_UPLOAD_WORKER_POOL", 50),
+			ProcessingWorkerPool:  getEnvAsInt("PERF_PROCESSING_WORKER_POOL", 20),
+			
+			// 队列配置
+			EnableQueue:       getEnvAsBool("PERF_ENABLE_QUEUE", true),
+			QueueSize:         getEnvAsInt("PERF_QUEUE_SIZE", 10000),
+			BatchSize:         getEnvAsInt("PERF_BATCH_SIZE", 10),
+			ProcessingTimeout: getEnvAsInt("PERF_PROCESSING_TIMEOUT", 30),
+			
+			// CDN和预热
+			EnableCDNPrefetch: getEnvAsBool("PERF_ENABLE_CDN_PREFETCH", true),
+			PrefetchWorkers:   getEnvAsInt("PERF_PREFETCH_WORKERS", 5),
+			
+			// 性能监控
+			EnableMetrics:   getEnvAsBool("PERF_ENABLE_METRICS", true),
+			MetricsInterval: getEnvAsInt("PERF_METRICS_INTERVAL", 60),
 		},
 	}
 

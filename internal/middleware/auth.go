@@ -51,6 +51,42 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
+// OptionalAuth 可选认证中间件
+// 如果提供了token则验证，如果没有提供则不验证，继续执行
+func OptionalAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			// 没有提供认证头，继续执行
+			c.Next()
+			return
+		}
+
+		tokenParts := strings.Split(authHeader, " ")
+		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			// 认证头格式不正确，但不阻止执行
+			c.Next()
+			return
+		}
+
+		token := tokenParts[1]
+		claims, err := auth.ValidateAccessToken(token)
+		if err != nil {
+			// token无效，但不阻止执行
+			c.Next()
+			return
+		}
+
+		// token有效，将用户信息存储到上下文中
+		c.Set("user_id", claims.UserID)
+		c.Set("user_email", claims.Email)
+		c.Set("user_role", claims.Role)
+		c.Set("user_type", claims.UserType)
+
+		c.Next()
+	}
+}
+
 // AdminAuthMiddleware 管理员认证中间件
 func AdminAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
