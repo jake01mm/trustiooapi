@@ -30,7 +30,7 @@ type Service struct {
 func NewService() *Service {
 	ipinfoConfig := ipinfo.LoadConfigFromEnv()
 	ipinfoClient := ipinfo.NewClient(ipinfoConfig)
-	
+
 	return &Service{
 		adminRepo:           NewAdminRepository(),
 		verificationService: verification.NewService(),
@@ -66,7 +66,7 @@ func (s *Service) Login(req *dto.AdminLoginRequest, clientIP, userAgent string) 
 	// 2. 发送登录验证码
 	sendReq := &verificationDto.SendVerificationRequest{
 		Target: req.Email,
-		Type:   "admin_login",
+		Type:   req.VerificationType(),
 	}
 	_, err = s.verificationService.SendVerificationCode(sendReq)
 	if err != nil {
@@ -95,7 +95,7 @@ func (s *Service) LoginVerify(req *dto.AdminLoginVerifyRequest, clientIP, userAg
 	verifyReq := &verificationDto.VerifyCodeRequest{
 		Target: req.Email,
 		Code:   req.Code,
-		Type:   "admin_login",
+		Type:   req.VerificationType(),
 	}
 	verifyResp, err := s.verificationService.VerifyCode(verifyReq)
 	if err != nil {
@@ -136,6 +136,12 @@ func (s *Service) LoginVerify(req *dto.AdminLoginVerifyRequest, clientIP, userAg
 
 	// 6. 更新最后登录时间
 	err = s.adminRepo.UpdateLastLogin(admin.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 7. 标记邮箱为已验证
+	err = s.adminRepo.UpdateEmailVerified(admin.ID, true)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +262,7 @@ func (s *Service) recordLoginSessionWithIPInfo(adminID int64, ip, userAgent, sta
 	// 获取IP地理位置信息
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if ipInfo, err := s.ipinfoClient.GetIPInfo(ctx, ip); err == nil {
 		session.Country = ipInfo.Country
 		session.City = ipInfo.City
@@ -295,7 +301,7 @@ func (s *Service) recordLoginSessionWithIPInfo(adminID int64, ip, userAgent, sta
 
 func (s *Service) parseUserAgent(session *entities.AdminLoginSession, userAgent string) {
 	ua := strings.ToLower(userAgent)
-	
+
 	// 检测设备类型
 	if strings.Contains(ua, "mobile") || strings.Contains(ua, "android") || strings.Contains(ua, "iphone") {
 		session.DeviceType = "mobile"
@@ -304,7 +310,7 @@ func (s *Service) parseUserAgent(session *entities.AdminLoginSession, userAgent 
 	} else {
 		session.DeviceType = "desktop"
 	}
-	
+
 	// 检测操作系统
 	if strings.Contains(ua, "windows") {
 		session.OS = "Windows"
@@ -317,7 +323,7 @@ func (s *Service) parseUserAgent(session *entities.AdminLoginSession, userAgent 
 	} else if strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad") || strings.Contains(ua, "ios") {
 		session.OS = "iOS"
 	}
-	
+
 	// 检测浏览器
 	if strings.Contains(ua, "chrome") && !strings.Contains(ua, "edge") {
 		session.Browser = "Chrome"
@@ -330,7 +336,7 @@ func (s *Service) parseUserAgent(session *entities.AdminLoginSession, userAgent 
 	} else if strings.Contains(ua, "opera") {
 		session.Browser = "Opera"
 	}
-	
+
 	// 检测平台
 	if strings.Contains(ua, "mobile") || strings.Contains(ua, "android") || strings.Contains(ua, "iphone") {
 		session.Platform = "mobile"

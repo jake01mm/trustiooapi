@@ -18,6 +18,7 @@ type AdminRepository interface {
 	Update(admin *entities.Admin) error
 	UpdateLastLogin(id int64) error
 	UpdatePassword(id int64, password string) error
+	UpdateEmailVerified(id int64, verified bool) error
 
 	// RefreshToken相关
 	CreateRefreshToken(token *entities.AdminRefreshToken) error
@@ -69,8 +70,9 @@ func (r *adminRepository) GetByID(id int64) (*entities.Admin, error) {
 
 func (r *adminRepository) Create(admin *entities.Admin) error {
 	query := `
-		INSERT INTO admins (name, email, password, phone, image_key, role, is_super, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO admins (name, email, password, phone, image_key, role, is_super, status,
+			email_verified, phone_verified, profile_completed)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id, created_at, updated_at`
 	
 	return database.DB.QueryRow(query,
@@ -82,6 +84,9 @@ func (r *adminRepository) Create(admin *entities.Admin) error {
 		admin.Role,
 		admin.IsSuper,
 		admin.Status,
+		admin.EmailVerified,
+		admin.PhoneVerified,
+		admin.ProfileCompleted,
 	).Scan(&admin.ID, &admin.CreatedAt, &admin.UpdatedAt)
 }
 
@@ -89,7 +94,8 @@ func (r *adminRepository) Update(admin *entities.Admin) error {
 	query := `
 		UPDATE admins 
 		SET name = $2, email = $3, phone = $4, image_key = $5, role = $6, 
-			is_super = $7, status = $8, updated_at = NOW()
+			is_super = $7, status = $8, email_verified = $9, phone_verified = $10,
+			profile_completed = $11, updated_at = NOW()
 		WHERE id = $1
 		RETURNING updated_at`
 	
@@ -102,6 +108,9 @@ func (r *adminRepository) Update(admin *entities.Admin) error {
 		admin.Role,
 		admin.IsSuper,
 		admin.Status,
+		admin.EmailVerified,
+		admin.PhoneVerified,
+		admin.ProfileCompleted,
 	).Scan(&admin.UpdatedAt)
 }
 
@@ -112,6 +121,11 @@ func (r *adminRepository) UpdateLastLogin(id int64) error {
 
 func (r *adminRepository) UpdatePassword(id int64, password string) error {
 	_, err := database.DB.Exec("UPDATE admins SET password = $2, updated_at = NOW() WHERE id = $1", id, password)
+	return err
+}
+
+func (r *adminRepository) UpdateEmailVerified(id int64, verified bool) error {
+	_, err := database.DB.Exec("UPDATE admins SET email_verified = $2, updated_at = NOW() WHERE id = $1", id, verified)
 	return err
 }
 

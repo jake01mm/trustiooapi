@@ -34,15 +34,6 @@ func getUserID(c *gin.Context) (int, error) {
 	return userID, nil
 }
 
-// 检查用户类型的辅助函数
-func getUserType(c *gin.Context) string {
-	if userType, exists := c.Get("user_type"); exists {
-		if ut, ok := userType.(string); ok {
-			return ut
-		}
-	}
-	return ""
-}
 
 // 用户上传图片 - 需要认证
 func (h *Handler) UploadImage(c *gin.Context) {

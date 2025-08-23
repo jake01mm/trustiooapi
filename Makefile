@@ -1,4 +1,4 @@
-.PHONY: help dev build run test clean install-air migrate-up migrate-down migrate-status backup
+.PHONY: help dev build run test clean install-air migrate-up migrate-down migrate-status backup kill
 
 # 默认目标
 help:
@@ -9,10 +9,9 @@ help:
 	@echo "  test         - Run tests"
 	@echo "  clean        - Clean build artifacts"
 	@echo "  install-air  - Install Air hot reload tool"
-	@echo "  migrate-up   - Run database migrations up"
-	@echo "  migrate-down - Run database migrations down"
-	@echo "  migrate-status - Check migration status"
+	@echo "  init-db      - Initialize the database"
 	@echo "  backup       - Create database backup"
+	@echo "  kill         - Kill process listening on port 8080"
 
 # 开发模式 - 使用Air热重载
 dev:
@@ -50,22 +49,36 @@ install-air:
 	@echo "Installing Air..."
 	@go install github.com/cosmtrek/air@latest
 
-# 数据库迁移 - 向上
-migrate-up:
-	@echo "Running database migrations up..."
-	@go run tools/db/migrate/migrate.go up
 
-# 数据库迁移 - 向下
-migrate-down:
-	@echo "Running database migrations down..."
-	@go run tools/db/migrate/migrate.go down
-
-# 检查迁移状态
-migrate-status:
-	@echo "Checking migration status..."
-	@go run tools/db/migrate/migrate.go status
+# 数据库初始化
+init-db:
+	@echo "Initializing database..."
+	@docker exec -i trusioo-postgres psql -U neondb_owner -d neondb < scripts/init_db.sql
 
 # 数据库备份
 backup:
 	@echo "Creating database backup..."
 	@go run tools/db/backup/backup.go
+
+# Kill process on port 8080 (macOS)
+kill:
+	@echo "Killing process on port 8080..."
+	@PIDS=$$(lsof -ti tcp:8080 -sTCP:LISTEN || true); \
+	if [ -n "$$PIDS" ]; then \
+		echo "Found PID(s): $$PIDS"; \
+		kill -15 $$PIDS || true; \
+		sleep 1; \
+		STILL=$$(lsof -ti tcp:8080 -sTCP:LISTEN || true); \
+		if [ -n "$$STILL" ]; then \
+			echo "Force killing: $$STILL"; \
+			kill -9 $$STILL || true; \
+		fi; \
+	else \
+		echo "No process is listening on port 8080"; \
+	fi; \
+	FINAL=$$(lsof -ti tcp:8080 -sTCP:LISTEN || true); \
+	if [ -z "$$FINAL" ]; then \
+		echo "Port 8080 is now free."; \
+	else \
+		echo "Port 8080 still has listeners: $$FINAL"; \
+	fi

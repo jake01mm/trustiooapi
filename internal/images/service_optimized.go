@@ -209,7 +209,7 @@ func (s *OptimizedImageService) GetUserImage(ctx context.Context, userID int, im
 				s.metrics.CacheHits++
 				s.mu.Unlock()
 				
-				return s.imageToResponse(ctx, cachedImage), nil
+				return s.imageToResponse(cachedImage), nil
 			}
 		}
 	}
@@ -234,7 +234,7 @@ func (s *OptimizedImageService) GetUserImage(ctx context.Context, userID int, im
 		s.cache.SetImage(ctx, image)
 	}
 	
-	return s.imageToResponse(ctx, image), nil
+	return s.imageToResponse(image), nil
 }
 
 // 优化版公开图片获取
@@ -250,7 +250,7 @@ func (s *OptimizedImageService) GetPublicImageByKey(ctx context.Context, key str
 			s.metrics.CacheHits++
 			s.mu.Unlock()
 			
-			return s.imageToResponse(ctx, cachedImage), nil
+			return s.imageToResponse(cachedImage), nil
 		}
 	}
 	
@@ -274,7 +274,7 @@ func (s *OptimizedImageService) GetPublicImageByKey(ctx context.Context, key str
 		s.cache.SetImageByKey(ctx, key, image)
 	}
 	
-	return s.imageToResponse(ctx, image), nil
+	return s.imageToResponse(image), nil
 }
 
 // 优化版图片列表（带缓存）
@@ -320,7 +320,7 @@ func (s *OptimizedImageService) ListImages(ctx context.Context, userID *int, req
 		wg.Add(1)
 		go func(idx int, img *entities.Image) {
 			defer wg.Done()
-			imageResponses[idx] = *s.imageToResponse(ctx, img)
+			imageResponses[idx] = *s.imageToResponse(img)
 		}(i, image)
 	}
 	
@@ -387,7 +387,7 @@ func (s *OptimizedImageService) AdminListAllImages(ctx context.Context, req dto.
 		wg.Add(1)
 		go func(idx int, img *entities.Image) {
 			defer wg.Done()
-			imageResponses[idx] = *s.imageToResponse(ctx, img)
+			imageResponses[idx] = *s.imageToResponse(img)
 		}(i, image)
 	}
 	
@@ -412,7 +412,7 @@ func (s *OptimizedImageService) AdminListAllImages(ctx context.Context, req dto.
 }
 
 // 辅助方法
-func (s *OptimizedImageService) imageToResponse(ctx context.Context, image *entities.Image) *dto.GetImageResponse {
+func (s *OptimizedImageService) imageToResponse(image *entities.Image) *dto.GetImageResponse {
 	// 如果是私有图片且没有公开URL，异步生成预签名URL
 	if !image.IsPublic && image.PublicURL == nil {
 		go func() {

@@ -1,0 +1,811 @@
+{
+  "info": {
+    "name": "Trusioo Auth Complete API Collection",
+    "description": "Trusioo认证模块完整API测试集合，包含用户认证和管理员认证的所有端点",
+    "version": "2.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string",
+      "description": "API基础URL"
+    },
+    {
+      "key": "userAccessToken",
+      "value": "",
+      "type": "string",
+      "description": "用户访问令牌"
+    },
+    {
+      "key": "userRefreshToken",
+      "value": "",
+      "type": "string",
+      "description": "用户刷新令牌"
+    },
+    {
+      "key": "adminAccessToken",
+      "value": "",
+      "type": "string",
+      "description": "管理员访问令牌"
+    },
+    {
+      "key": "adminRefreshToken",
+      "value": "",
+      "type": "string",
+      "description": "管理员刷新令牌"
+    },
+    {
+      "key": "testUserEmail",
+      "value": "test@example.com",
+      "type": "string",
+      "description": "测试用户邮箱"
+    },
+    {
+      "key": "testUserPassword",
+      "value": "password123",
+      "type": "string",
+      "description": "测试用户密码"
+    },
+    {
+      "key": "testAdminEmail",
+      "value": "admin@trusioo.com",
+      "type": "string",
+      "description": "测试管理员邮箱"
+    },
+    {
+      "key": "testAdminPassword",
+      "value": "admin123",
+      "type": "string",
+      "description": "测试管理员密码"
+    },
+    {
+      "key": "verificationCode",
+      "value": "123456",
+      "type": "string",
+      "description": "验证码（测试用）"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// 预请求脚本 - 设置通用请求头",
+          "pm.request.headers.add({",
+          "    key: 'X-Request-ID',",
+          "    value: pm.variables.replaceIn('{{$guid}}')",
+          "});",
+          "",
+          "// 设置时间戳",
+          "pm.collectionVariables.set('timestamp', new Date().toISOString());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// 通用测试脚本 - 验证响应基本结构",
+          "pm.test('Response time is less than 5000ms', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});",
+          "",
+          "pm.test('Response has required headers', function () {",
+          "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+          "    pm.expect(pm.response.headers.get('X-Request-Id')).to.exist;",
+          "});",
+          "",
+          "// 验证响应JSON结构",
+          "pm.test('Response has valid JSON structure', function () {",
+          "    const response = pm.response.json();",
+          "    pm.expect(response).to.have.property('code');",
+          "    pm.expect(response).to.have.property('message');",
+          "});"
+        ]
+      }
+    }
+  ],  "item": [
+    {
+      "name": "👤 用户认证 (User Authentication)",
+      "description": "用户注册、登录、密码重置等认证功能",
+      "item": [
+        {
+          "name": "1. 用户注册",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.expect(pm.response.code).to.eql(201);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('User registered successfully', function () {",
+                  "    pm.expect(response.code).to.eql(201);",
+                  "    pm.expect(response.data).to.have.property('user');",
+                  "    pm.expect(response.data.user).to.have.property('id');",
+                  "    pm.expect(response.data.user).to.have.property('email');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testUserEmail}}\",\n  \"password\": \"{{testUserPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "用户注册\n\n**请求参数:**\n- email: 用户邮箱\n- password: 用户密码\n\n**响应说明:**\n- 201: 注册成功\n- 400: 参数错误\n- 409: 邮箱已存在"
+          }
+        },        {
+          "name": "2. 用户登录 (第一步)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Login step 1 successful', function () {",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "    pm.expect(response.data).to.have.property('message');",
+                  "    pm.expect(response.data.message).to.include('verification code sent');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testUserEmail}}\",\n  \"password\": \"{{testUserPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "用户登录（第一步）\n\n**请求参数:**\n- email: 用户邮箱\n- password: 用户密码\n\n**响应说明:**\n- 200: 验证码已发送\n- 400: 参数错误\n- 401: 邮箱或密码错误"
+          }
+        },        {
+          "name": "3. 验证用户登录验证码 (第二步)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Login verification successful', function () {",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "    pm.expect(response.data).to.have.property('access_token');",
+                  "    pm.expect(response.data).to.have.property('refresh_token');",
+                  "});",
+                  "",
+                  "// 保存令牌到集合变量",
+                  "if (response.data && response.data.access_token) {",
+                  "    pm.collectionVariables.set('userAccessToken', response.data.access_token);",
+                  "    pm.collectionVariables.set('userRefreshToken', response.data.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testUserEmail}}\",\n  \"code\": \"{{verificationCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login", "verify"]
+            },
+            "description": "验证用户登录验证码（第二步）\n\n**请求参数:**\n- email: 用户邮箱\n- code: 6位验证码\n\n**内部机制说明:**\n- Service层会自动添加 type: \"user_login\" 字段调用verification服务\n- 用户请求无需包含type字段\n\n**响应说明:**\n- 200: 验证成功，返回访问令牌\n- 400: 验证码错误或已过期\n- 404: 用户不存在"
+          }
+        },        {
+          "name": "4. 忘记密码",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Reset code sent successfully', function () {",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "    pm.expect(response.data).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testUserEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "forgot-password"]
+            },
+            "description": "发送密码重置验证码\n\n**请求参数:**\n- email: 用户邮箱\n\n**响应说明:**\n- 200: 重置码发送成功\n- 404: 用户不存在"
+          }
+        },        {
+          "name": "5. 重置密码",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Password reset successfully', function () {",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "    pm.expect(response.data).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testUserEmail}}\",\n  \"code\": \"{{verificationCode}}\",\n  \"new_password\": \"newpassword123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "reset-password"]
+            },
+            "description": "重置密码\n\n**请求参数:**\n- email: 用户邮箱\n- code: 重置验证码\n- new_password: 新密码\n\n**响应说明:**\n- 200: 密码重置成功\n- 400: 验证码错误或已过期"
+          }
+        },        {
+          "name": "6. 刷新访问令牌",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Token refreshed successfully', function () {",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "    pm.expect(response.data).to.have.property('access_token');",
+                  "    pm.expect(response.data).to.have.property('refresh_token');",
+                  "});",
+                  "",
+                  "// 更新令牌变量",
+                  "if (response.data && response.data.access_token) {",
+                  "    pm.collectionVariables.set('userAccessToken', response.data.access_token);",
+                  "    pm.collectionVariables.set('userRefreshToken', response.data.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{userRefreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
+            },
+            "description": "刷新访问令牌\n\n**请求参数:**\n- refresh_token: 刷新令牌\n\n**响应说明:**\n- 200: 令牌刷新成功\n- 401: 刷新令牌无效或已过期"
+          }
+        },        {
+          "name": "7. 获取用户资料",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('User profile retrieved successfully', function () {",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "    pm.expect(response.data).to.have.property('user');",
+                  "    pm.expect(response.data.user).to.have.property('id');",
+                  "    pm.expect(response.data.user).to.have.property('email');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}",
+                "description": "用户访问令牌"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "profile"]
+            },
+            "description": "获取当前用户资料\n\n**请求头:**\n- Authorization: Bearer {access_token}\n\n**响应说明:**\n- 200: 获取成功\n- 401: 令牌无效或已过期"
+          }
+        }
+      ]
+    },    {
+      "name": "🔐 管理员认证 (Admin Authentication)",
+      "description": "管理员登录、验证码验证、令牌管理等功能",
+      "item": [
+        {
+          "name": "1. 管理员登录 (第一步)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Admin login step 1 successful', function () {",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "    pm.expect(response.data).to.have.property('message');",
+                  "    pm.expect(response.data.message).to.include('verification code sent');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testAdminEmail}}\",\n  \"password\": \"{{testAdminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "auth", "login"]
+            },
+            "description": "管理员登录（第一步）\n\n**请求参数:**\n- email: 管理员邮箱\n- password: 管理员密码\n\n**响应说明:**\n- 200: 验证码已发送\n- 400: 参数错误\n- 401: 邮箱或密码错误\n- 403: 非管理员账户"
+          }
+        },        {
+          "name": "2. 验证管理员验证码 (第二步)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Admin verification successful', function () {",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "    pm.expect(response.data).to.have.property('access_token');",
+                  "    pm.expect(response.data).to.have.property('refresh_token');",
+                  "});",
+                  "",
+                  "// 保存管理员令牌",
+                  "if (response.data && response.data.access_token) {",
+                  "    pm.collectionVariables.set('adminAccessToken', response.data.access_token);",
+                  "    pm.collectionVariables.set('adminRefreshToken', response.data.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testAdminEmail}}\",\n  \"code\": \"{{verificationCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/auth/login/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "auth", "login", "verify"]
+            },
+            "description": "验证管理员验证码（第二步）\n\n**请求参数:**\n- email: 管理员邮箱\n- code: 6位验证码\n\n**内部机制说明:**\n- Service层会自动添加 type: \"admin_login\" 字段调用verification服务\n- 管理员请求无需包含type字段\n\n**响应说明:**\n- 200: 验证成功，返回访问令牌\n- 400: 验证码错误或已过期\n- 404: 管理员不存在"
+          }
+        },        {
+          "name": "3. 刷新管理员访问令牌",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Admin token refreshed successfully', function () {",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "    pm.expect(response.data).to.have.property('access_token');",
+                  "    pm.expect(response.data).to.have.property('refresh_token');",
+                  "});",
+                  "",
+                  "// 更新管理员令牌变量",
+                  "if (response.data && response.data.access_token) {",
+                  "    pm.collectionVariables.set('adminAccessToken', response.data.access_token);",
+                  "    pm.collectionVariables.set('adminRefreshToken', response.data.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{adminRefreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "auth", "refresh"]
+            },
+            "description": "刷新管理员访问令牌\n\n**请求参数:**\n- refresh_token: 管理员刷新令牌\n\n**响应说明:**\n- 200: 令牌刷新成功\n- 401: 刷新令牌无效或已过期"
+          }
+        },        {
+          "name": "4. 获取管理员资料",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Admin profile retrieved successfully', function () {",
+                  "    pm.expect(response.code).to.eql(200);",
+                  "    pm.expect(response.data).to.have.property('admin');",
+                  "    pm.expect(response.data.admin).to.have.property('id');",
+                  "    pm.expect(response.data.admin).to.have.property('email');",
+                  "    pm.expect(response.data.admin).to.have.property('role');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}",
+                "description": "管理员访问令牌"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "auth", "profile"]
+            },
+            "description": "获取当前管理员资料\n\n**请求头:**\n- Authorization: Bearer {admin_access_token}\n\n**响应说明:**\n- 200: 获取成功\n- 401: 令牌无效或已过期\n- 403: 非管理员权限"
+          }
+        }
+      ]
+    },    {
+      "name": "🚨 错误场景测试 (Error Scenarios)",
+      "description": "各种错误情况和边界条件的测试用例",
+      "item": [
+        {
+          "name": "1. 无效邮箱格式测试",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422', function () {",
+                  "    pm.expect(pm.response.code).to.eql(422);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Email validation error', function () {",
+                  "    pm.expect(response.message).to.include('email');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"invalid-email\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "测试无效邮箱格式的注册请求"
+          }
+        },        {
+          "name": "2. 弱密码测试",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422', function () {",
+                  "    pm.expect(pm.response.code).to.eql(422);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Password validation error', function () {",
+                  "    pm.expect(response.message).to.include('password');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "测试弱密码的注册请求"
+          }
+        },
+        {
+          "name": "3. 无效令牌测试",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401', function () {",
+                  "    pm.expect(pm.response.code).to.eql(401);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Invalid token error', function () {",
+                  "    pm.expect(response.message).to.include('token');",
+                  "});"
+                ]
+              }
+            }
+          ],          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid_token_here",
+                "description": "无效的访问令牌"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "profile"]
+            },
+            "description": "测试使用无效令牌访问受保护资源"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "testUserEmail",
+      "value": "testuser@example.com",
+      "type": "string"
+    },
+    {
+      "key": "testUserPassword",
+      "value": "TestPassword123!",
+      "type": "string"
+    },
+    {
+      "key": "testAdminEmail",
+      "value": "admin@trusioo.com",
+      "type": "string"
+    },
+    {
+      "key": "testAdminPassword",
+      "value": "AdminPassword123!",
+      "type": "string"
+    },
+    {
+      "key": "verificationCode",
+      "value": "123456",
+      "type": "string",
+      "description": "6位验证码，需要从邮件或短信中获取"
+    },
+    {
+      "key": "userAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userRefreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminRefreshToken",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

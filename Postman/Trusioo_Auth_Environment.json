@@ -1,0 +1,75 @@
+{
+  "id": "trusioo-auth-env",
+  "name": "Trusioo Auth Environment",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "description": "API基础URL - 开发环境",
+      "enabled": true
+    },
+    {
+      "key": "prodBaseUrl",
+      "value": "https://api.trusioo.com/api/v1",
+      "description": "API基础URL - 生产环境",
+      "enabled": false
+    },
+    {
+      "key": "testUserEmail",
+      "value": "test@example.com",
+      "description": "测试用户邮箱",
+      "enabled": true
+    },
+    {
+      "key": "testUserPassword",
+      "value": "password123",
+      "description": "测试用户密码",
+      "enabled": true
+    },
+    {
+      "key": "testAdminEmail",
+      "value": "admin@trusioo.com",
+      "description": "测试管理员邮箱",
+      "enabled": true
+    },
+    {
+      "key": "testAdminPassword",
+      "value": "admin123",
+      "description": "测试管理员密码",
+      "enabled": true
+    },
+    {
+      "key": "verificationCode",
+      "value": "123456",
+      "description": "测试验证码（实际使用时需要从邮件获取）",
+      "enabled": true
+    },
+    {
+      "key": "userAccessToken",
+      "value": "",
+      "description": "用户访问令牌（登录后自动设置）",
+      "enabled": true
+    },
+    {
+      "key": "userRefreshToken",
+      "value": "",
+      "description": "用户刷新令牌（登录后自动设置）",
+      "enabled": true
+    },
+    {
+      "key": "adminAccessToken",
+      "value": "",
+      "description": "管理员访问令牌（登录后自动设置）",
+      "enabled": true
+    },
+    {
+      "key": "adminRefreshToken",
+      "value": "",
+      "description": "管理员刷新令牌（登录后自动设置）",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_at": "2024-01-20T10:00:00.000Z",
+  "_postman_exported_using": "Postman/10.0.0"
+}

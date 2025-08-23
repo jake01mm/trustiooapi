@@ -29,6 +29,7 @@ type DatabaseConfig struct {
 	User           string
 	Password       string
 	Name           string
+	SSLMode        string
 	MaxOpenConns   int
 	MaxIdleConns   int
 	ConnMaxLifetime int
@@ -159,6 +160,7 @@ func LoadConfig() error {
 			User:           getEnv("DB_USER", "postgres"),
 			Password:       getEnv("DB_PASSWORD", ""),
 			Name:           getEnv("DB_NAME", "trusioo_db"),
+			SSLMode:        getEnv("DB_SSLMODE", "require"),
 			MaxOpenConns:   getEnvAsInt("DB_MAX_OPEN_CONNS", 25),
 			MaxIdleConns:   getEnvAsInt("DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: getEnvAsInt("DB_CONN_MAX_LIFETIME", 300),

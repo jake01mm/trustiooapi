@@ -14,10 +14,21 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// VerificationType 返回用户登录的验证类型
+func (r *LoginRequest) VerificationType() string {
+	return "user_login"
+}
+
 // LoginVerifyRequest 登录验证请求 - 第二步：验证登录验证码
+// 注意：此请求在Service层会自动添加 type: "user_login" 字段调用verification服务
 type LoginVerifyRequest struct {
 	Email string `json:"email" binding:"required,email"`
 	Code  string `json:"code" binding:"required,len=6"`
+}
+
+// VerificationType 返回此DTO对应的验证类型
+func (r *LoginVerifyRequest) VerificationType() string {
+	return "user_login"
 }
 
 // LoginCodeResponse 登录验证码响应
@@ -29,11 +40,11 @@ type LoginCodeResponse struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	AccessToken  string         `json:"access_token"`
-	RefreshToken string         `json:"refresh_token"`
-	ExpiresIn    int64          `json:"expires_in"`
-	TokenType    string         `json:"token_type"`
-	User         *entities.User `json:"user"`
+	AccessToken  string            `json:"access_token"`
+	RefreshToken string            `json:"refresh_token"`
+	ExpiresIn    int64             `json:"expires_in"`
+	TokenType    string            `json:"token_type"`
+	User         *entities.User    `json:"user"`
 	LoginSession *LoginSessionInfo `json:"login_session,omitempty"`
 }
 
@@ -81,4 +92,3 @@ type ResetPasswordRequest struct {
 type ResetPasswordResponse struct {
 	Message string `json:"message"`
 }
-

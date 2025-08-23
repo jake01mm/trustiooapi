@@ -6,7 +6,6 @@ import (
 	"trusioo_api/config"
 	admin_auth "trusioo_api/internal/auth/admin_auth"
 	user_auth "trusioo_api/internal/auth/user_auth"
-	"trusioo_api/internal/carddetection"
 	"trusioo_api/internal/health"
 	"trusioo_api/internal/images"
 	"trusioo_api/internal/middleware"
@@ -115,15 +114,15 @@ func SetupRouter() *gin.Engine {
 	imageService := images.NewService(imageRepo, r2Client)
 	imageHandler := images.NewHandler(imageService)
 
+
+
 	// 初始化处理器
 	authHandler := user_auth.NewHandler(authService)
 	adminHandler := admin_auth.NewHandler(adminService)
-	cardDetectionHandler := carddetection.NewHandler()
 
 	// 注册路由
 	user_auth.RegisterRoutes(authGroup, authHandler)
 	admin_auth.RegisterRoutes(api, adminHandler)
-	carddetection.RegisterRoutes(api, cardDetectionHandler)
 	images.RegisterRoutes(api, imageHandler)
 
 	return r

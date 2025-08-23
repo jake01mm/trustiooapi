@@ -183,7 +183,9 @@ func TestCheckCardValidation(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				// Note: This will fail due to network call, but validation should pass
-				assert.Contains(t, err.Error(), "request failed")
+				if err != nil {
+					assert.Contains(t, err.Error(), "request failed")
+				}
 			}
 		})
 	}

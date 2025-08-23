@@ -19,16 +19,22 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// VerificationService 验证服务接口
+type VerificationService interface {
+	SendVerificationCode(req *verificationDto.SendVerificationRequest) (*verificationDto.SendVerificationResponse, error)
+	VerifyCode(req *verificationDto.VerifyCodeRequest) (*verificationDto.VerifyCodeResponse, error)
+}
+
 type Service struct {
 	repo                Repository
-	verificationService *verification.Service
+	verificationService VerificationService
 	ipinfoClient        ipinfo.Client
 }
 
 func NewService(repo Repository) *Service {
 	ipinfoConfig := ipinfo.LoadConfigFromEnv()
 	ipinfoClient := ipinfo.NewClient(ipinfoConfig)
-	
+
 	return &Service{
 		repo:                repo,
 		verificationService: verification.NewService(),
@@ -80,7 +86,6 @@ func (s *Service) Register(req *dto.RegisterRequest) (*dto.RegisterResponse, err
 	}, nil
 }
 
-
 // Login 第一步登录 - 验证email+password并发送登录验证码
 func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto.LoginCodeResponse, error) {
 	// 1. 验证email+password
@@ -109,7 +114,7 @@ func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto
 	// 2. 发送登录验证码
 	sendReq := &verificationDto.SendVerificationRequest{
 		Target: req.Email,
-		Type:   "user_login",
+		Type:   req.VerificationType(),
 	}
 	_, err = s.verificationService.SendVerificationCode(sendReq)
 	if err != nil {
@@ -122,7 +127,6 @@ func (s *Service) Login(req *dto.LoginRequest, clientIP, userAgent string) (*dto
 		ExpiresIn: 600, // 10分钟
 	}, nil
 }
-
 
 // LoginVerify 第二步登录 - 验证登录验证码并返回token
 func (s *Service) LoginVerify(req *dto.LoginVerifyRequest, clientIP, userAgent string) (*dto.LoginResponse, error) {
@@ -139,7 +143,7 @@ func (s *Service) LoginVerify(req *dto.LoginVerifyRequest, clientIP, userAgent s
 	verifyReq := &verificationDto.VerifyCodeRequest{
 		Target: req.Email,
 		Code:   req.Code,
-		Type:   "user_login",
+		Type:   req.VerificationType(),
 	}
 	verifyResp, err := s.verificationService.VerifyCode(verifyReq)
 	if err != nil {
@@ -342,7 +346,6 @@ func (s *Service) ResetPassword(req *dto.ResetPasswordRequest) (*dto.ResetPasswo
 	}, nil
 }
 
-
 func (s *Service) recordLoginSession(userID int64, ip, userAgent, method, status, reason string) {
 	s.recordLoginSessionWithIPInfo(userID, ip, userAgent, method, status, reason)
 }
@@ -361,7 +364,7 @@ func (s *Service) recordLoginSessionWithIPInfo(userID int64, ip, userAgent, meth
 	// 获取IP地理位置信息
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if ipInfo, err := s.ipinfoClient.GetIPInfo(ctx, ip); err == nil {
 		session.Country = ipInfo.Country
 		session.City = ipInfo.City
@@ -400,7 +403,7 @@ func (s *Service) recordLoginSessionWithIPInfo(userID int64, ip, userAgent, meth
 
 func (s *Service) parseUserAgent(session *entities.LoginSession, userAgent string) {
 	ua := strings.ToLower(userAgent)
-	
+
 	// 检测设备类型
 	if strings.Contains(ua, "mobile") || strings.Contains(ua, "android") || strings.Contains(ua, "iphone") {
 		session.DeviceType = "mobile"
@@ -409,7 +412,7 @@ func (s *Service) parseUserAgent(session *entities.LoginSession, userAgent strin
 	} else {
 		session.DeviceType = "desktop"
 	}
-	
+
 	// 检测操作系统
 	if strings.Contains(ua, "windows") {
 		session.OS = "Windows"
@@ -422,7 +425,7 @@ func (s *Service) parseUserAgent(session *entities.LoginSession, userAgent strin
 	} else if strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad") || strings.Contains(ua, "ios") {
 		session.OS = "iOS"
 	}
-	
+
 	// 检测浏览器
 	if strings.Contains(ua, "chrome") && !strings.Contains(ua, "edge") {
 		session.Browser = "Chrome"
@@ -435,7 +438,7 @@ func (s *Service) parseUserAgent(session *entities.LoginSession, userAgent strin
 	} else if strings.Contains(ua, "opera") {
 		session.Browser = "Opera"
 	}
-	
+
 	// 检测平台
 	if strings.Contains(ua, "mobile") || strings.Contains(ua, "android") || strings.Contains(ua, "iphone") {
 		session.Platform = "mobile"

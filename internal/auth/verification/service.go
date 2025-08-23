@@ -2,7 +2,6 @@ package verification
 
 import (
 	"crypto/rand"
-	"database/sql"
 	"fmt"
 	"log"
 	"math/big"
@@ -10,7 +9,6 @@ import (
 
 	"trusioo_api/internal/auth/verification/dto"
 	"trusioo_api/internal/auth/verification/entities"
-	"trusioo_api/pkg/database"
 )
 
 type Service struct {
@@ -23,52 +21,7 @@ func NewService() *Service {
 	}
 }
 
-// checkUserExists 检查用户是否存在于数据库中
-func (s *Service) checkUserExists(email, userType string) (bool, int64, error) {
-	var userID int64
-	var query string
-	
-	if userType == "admin" {
-		query = "SELECT id FROM admins WHERE email = $1"
-	} else {
-		query = "SELECT id FROM users WHERE email = $1"
-	}
-	
-	err := database.DB.QueryRow(query, email).Scan(&userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return false, 0, nil // 用户不存在
-		}
-		return false, 0, err // 数据库错误
-	}
-	
-	return true, userID, nil // 用户存在
-}
 
-// activateUserAccount 激活用户账户
-func (s *Service) activateUserAccount(email string) error {
-	query := `
-		UPDATE users 
-		SET status = 'active', email_verified = true, updated_at = NOW()
-		WHERE email = $1 AND status = 'inactive'
-	`
-	
-	result, err := database.DB.Exec(query, email)
-	if err != nil {
-		return fmt.Errorf("failed to update user status: %w", err)
-	}
-	
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-	
-	if rowsAffected == 0 {
-		return fmt.Errorf("user not found or already active")
-	}
-	
-	return nil
-}
 
 // SendVerificationCode 发送验证码
 func (s *Service) SendVerificationCode(req *dto.SendVerificationRequest) (*dto.SendVerificationResponse, error) {

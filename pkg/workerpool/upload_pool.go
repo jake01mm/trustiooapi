@@ -52,6 +52,17 @@ type PoolMetrics struct {
 	MaxQueueSize      int64
 }
 
+// 无锁快照，用于对外返回，避免 copylocks
+type PoolStats struct {
+	TotalTasks        int64
+	CompletedTasks    int64
+	FailedTasks       int64
+	ActiveTasks       int64
+	AverageProcessing time.Duration
+	QueueSize         int64
+	MaxQueueSize      int64
+}
+
 func NewUploadPool(workers int, queueSize int, r2Client *r2storage.Client, maxRetries int, retryDelay time.Duration) *UploadPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	
@@ -80,7 +91,7 @@ func (p *UploadPool) Stop() {
 	p.wg.Wait()
 }
 
-func (p *UploadPool) worker(id int) {
+func (p *UploadPool) worker(_ int) {
 	defer p.wg.Done()
 	
 	for {
@@ -192,12 +203,12 @@ func (p *UploadPool) Submit(task UploadTask) error {
 }
 
 // 获取池状态
-func (p *UploadPool) GetMetrics() PoolMetrics {
+func (p *UploadPool) GetMetrics() PoolStats {
 	p.metrics.mu.RLock()
 	defer p.metrics.mu.RUnlock()
 	
 	// 创建副本避免复制锁
-	metrics := PoolMetrics{
+	metrics := PoolStats{
 		TotalTasks:        p.metrics.TotalTasks,
 		CompletedTasks:    p.metrics.CompletedTasks,
 		FailedTasks:       p.metrics.FailedTasks,

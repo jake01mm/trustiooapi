@@ -56,20 +56,25 @@ type ProcessingQueue struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
-	metrics     *QueueMetrics
+	metrics     *internalMetrics
 	
 	// CDN预热相关
 	httpClient  *http.Client
 }
 
 type QueueMetrics struct {
-	mu              sync.RWMutex
 	ProcessedTasks  int64
 	FailedTasks     int64
 	ActiveWorkers   int64
 	QueueLength     int64
 	AverageLatency  time.Duration
 	LastProcessed   time.Time
+}
+
+// 内部metrics结构，包含mutex
+type internalMetrics struct {
+	mu              sync.RWMutex
+	data            QueueMetrics
 }
 
 func NewProcessingQueue(client *redis.Client, queueName string, workers, batchSize int, timeout time.Duration) *ProcessingQueue {
@@ -84,7 +89,7 @@ func NewProcessingQueue(client *redis.Client, queueName string, workers, batchSi
 		processor:  imageprocessor.NewProcessor(),
 		ctx:        ctx,
 		cancel:     cancel,
-		metrics:    &QueueMetrics{},
+		metrics:    &internalMetrics{},
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -108,12 +113,12 @@ func (q *ProcessingQueue) worker(workerID string) {
 	defer q.wg.Done()
 	
 	q.metrics.mu.Lock()
-	q.metrics.ActiveWorkers++
+	q.metrics.data.ActiveWorkers++
 	q.metrics.mu.Unlock()
 	
 	defer func() {
 		q.metrics.mu.Lock()
-		q.metrics.ActiveWorkers--
+		q.metrics.data.ActiveWorkers--
 		q.metrics.mu.Unlock()
 	}()
 	
@@ -441,20 +446,20 @@ func (q *ProcessingQueue) updateMetrics(success bool, duration time.Duration) {
 	defer q.metrics.mu.Unlock()
 	
 	if success {
-		q.metrics.ProcessedTasks++
+		q.metrics.data.ProcessedTasks++
 	} else {
-		q.metrics.FailedTasks++
+		q.metrics.data.FailedTasks++
 	}
 	
 	// 计算平均延迟
-	totalTasks := q.metrics.ProcessedTasks + q.metrics.FailedTasks
+	totalTasks := q.metrics.data.ProcessedTasks + q.metrics.data.FailedTasks
 	if totalTasks == 1 {
-		q.metrics.AverageLatency = duration
+		q.metrics.data.AverageLatency = duration
 	} else {
-		q.metrics.AverageLatency = (q.metrics.AverageLatency + duration) / 2
+		q.metrics.data.AverageLatency = (q.metrics.data.AverageLatency + duration) / 2
 	}
 	
-	q.metrics.LastProcessed = time.Now()
+	q.metrics.data.LastProcessed = time.Now()
 }
 
 // 获取指标
@@ -462,7 +467,7 @@ func (q *ProcessingQueue) GetMetrics() QueueMetrics {
 	q.metrics.mu.RLock()
 	defer q.metrics.mu.RUnlock()
 	
-	metrics := *q.metrics
+	metrics := q.metrics.data
 	
 	// 获取当前队列长度
 	if length, err := q.GetQueueLength(); err == nil {

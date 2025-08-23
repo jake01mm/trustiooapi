@@ -8,10 +8,21 @@ type AdminLoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// VerificationType 返回管理员登录的验证类型
+func (r *AdminLoginRequest) VerificationType() string {
+	return "admin_login"
+}
+
 // AdminLoginVerifyRequest 管理员登录验证请求 - 第二步：验证登录验证码
+// 注意：此请求在Service层会自动添加 type: "admin_login" 字段调用verification服务
 type AdminLoginVerifyRequest struct {
 	Email string `json:"email" binding:"required,email"`
 	Code  string `json:"code" binding:"required,len=6"`
+}
+
+// VerificationType 返回此DTO对应的验证类型
+func (r *AdminLoginVerifyRequest) VerificationType() string {
+	return "admin_login"
 }
 
 // AdminLoginCodeResponse 管理员登录验证码响应
@@ -23,11 +34,11 @@ type AdminLoginCodeResponse struct {
 
 // AdminLoginResponse 管理员登录响应
 type AdminLoginResponse struct {
-	AccessToken  string         `json:"access_token"`
-	RefreshToken string         `json:"refresh_token"`
-	ExpiresIn    int64          `json:"expires_in"`
-	TokenType    string         `json:"token_type"`
-	Admin        entities.Admin `json:"admin"`
+	AccessToken  string                 `json:"access_token"`
+	RefreshToken string                 `json:"refresh_token"`
+	ExpiresIn    int64                  `json:"expires_in"`
+	TokenType    string                 `json:"token_type"`
+	Admin        entities.Admin         `json:"admin"`
 	LoginSession *AdminLoginSessionInfo `json:"login_session,omitempty"`
 }
 
